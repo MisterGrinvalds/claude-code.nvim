@@ -181,6 +181,29 @@ function M.close()
   M.state.win = nil
 end
 
+-- Open Claude in current window (replaces current buffer)
+function M.open_in_current()
+  get_or_create_buf()
+
+  -- Set the buffer in current window
+  M.state.win = vim.api.nvim_get_current_win()
+  vim.api.nvim_win_set_buf(M.state.win, M.state.buf)
+  M.state.is_open = true
+
+  -- Start terminal if not already running
+  start_terminal()
+
+  -- Set up autocommand to update state when window closes
+  vim.api.nvim_create_autocmd('WinClosed', {
+    pattern = tostring(M.state.win),
+    once = true,
+    callback = function()
+      M.state.is_open = false
+      M.state.win = nil
+    end,
+  })
+end
+
 -- Toggle Claude Code window
 function M.toggle()
   if M.state.is_open then
@@ -449,6 +472,7 @@ end
 local function setup_commands()
   vim.api.nvim_create_user_command('ClaudeToggle', M.toggle, { desc = 'Toggle Claude Code window' })
   vim.api.nvim_create_user_command('ClaudeOpen', M.open, { desc = 'Open Claude Code window' })
+  vim.api.nvim_create_user_command('ClaudeCurrent', M.open_in_current, { desc = 'Open Claude in current window' })
   vim.api.nvim_create_user_command('ClaudeClose', M.close, { desc = 'Close Claude Code window' })
   vim.api.nvim_create_user_command('ClaudeSendFile', M.send_file, { desc = 'Send current file to Claude' })
   vim.api.nvim_create_user_command('ClaudeSendDiagnostics', M.send_diagnostics, { desc = 'Send diagnostics to Claude' })
