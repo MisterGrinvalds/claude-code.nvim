@@ -278,6 +278,11 @@ function M.replace_with_claude(session_name, block_index)
 
   local code = blocks[block_index]
 
+  -- Create undo point before modifying
+  vim.cmd('normal! m`') -- Mark position for `` jump
+  local undolevels = vim.o.undolevels
+  vim.o.undolevels = undolevels -- Force undo break
+
   -- Get visual selection range or current line
   local start_line, end_line
   local mode = vim.fn.mode()
@@ -298,7 +303,10 @@ function M.replace_with_claude(session_name, block_index)
   -- Replace selection
   vim.api.nvim_buf_set_lines(0, start_line, end_line, false, new_lines)
 
-  vim.notify('Replaced with Claude code block ' .. block_index .. ' of ' .. #blocks, vim.log.levels.INFO)
+  vim.notify(
+    string.format('✓ Replaced with Claude code block %d of %d (undo with u, jump back with ``)', block_index, #blocks),
+    vim.log.levels.INFO
+  )
 end
 
 --- Show code block picker (if multiple blocks)
@@ -317,14 +325,17 @@ function M.pick_and_replace(session_name)
     return
   end
 
-  -- Multiple blocks - show picker
-  vim.ui.select(blocks, {
-    prompt = 'Select code block to insert:',
-    format_item = function(item)
-      -- Show first line as preview
-      local first_line = item:match('^[^\n]+') or item
-      return first_line:sub(1, 60) .. (#first_line > 60 and '...' or '')
-    end,
+  -- Multiple blocks - show enhanced picker with line counts
+  local formatted_blocks = {}
+  for i, block in ipairs(blocks) do
+    local line_count = select(2, block:gsub('\n', '\n')) + 1
+    local first_line = block:match('^[^\n]+') or block
+    local preview = first_line:sub(1, 50) .. (#first_line > 50 and '...' or '')
+    formatted_blocks[i] = string.format('[%d lines] %s', line_count, preview)
+  end
+
+  vim.ui.select(formatted_blocks, {
+    prompt = 'Select code block to insert (' .. #blocks .. ' available):',
   }, function(choice, idx)
     if choice then
       M.replace_with_claude(session_name, idx)

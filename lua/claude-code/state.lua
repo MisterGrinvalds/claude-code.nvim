@@ -6,6 +6,9 @@ local M = {}
 -- Timer for periodic idle checks
 M.idle_timer = nil
 
+-- Code block tracking per session
+M.code_block_counts = {}
+
 --- Start monitoring a Claude session
 ---@param name string Session name
 function M.monitor_session(name)
@@ -22,11 +25,32 @@ function M.monitor_session(name)
       -- Get newly added lines
       local new_lines = vim.api.nvim_buf_get_lines(bufnr, firstline, new_lastline, false)
 
+      -- Track code blocks
+      local prev_count = M.code_block_counts[name] or 0
+      local current_count = 0
+
       for _, line in ipairs(new_lines) do
+        -- Count code blocks
+        if line:match('^```') then
+          current_count = current_count + 1
+        end
+
         -- Detect state from output patterns
         if line:match('^%s*>') or line:match('Enter your prompt') then
           -- Prompt detected - waiting for user input
           M.update_session_state(name, 'waiting')
+
+          -- Check if new code blocks were added since last check
+          local block_count = math.floor(current_count / 2) -- Pairs of ``` marks
+          if block_count > prev_count and block_count > 0 then
+            vim.schedule(function()
+              vim.notify(
+                string.format('Claude provided %d code block(s). Press <leader>cr to apply', block_count),
+                vim.log.levels.INFO
+              )
+            end)
+            M.code_block_counts[name] = block_count
+          end
         elseif line:match('^%s*<') or line:match('Assistant:') or #line > 0 then
           -- Response output - processing
           if session.state ~= 'processing' then
