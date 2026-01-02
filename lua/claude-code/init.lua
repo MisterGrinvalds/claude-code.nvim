@@ -218,4 +218,118 @@ function M.get_status()
   return status
 end
 
+--- Extract code blocks from Claude's response
+---@param session_name string|nil
+---@return string[]|nil Array of code blocks
+function M.extract_code_blocks(session_name)
+  session_name = session_name or M.session.current_session or M.session.last_session or M.config.default_session
+  local session = M.session.get_session(session_name)
+
+  if not session or not vim.api.nvim_buf_is_valid(session.buf) then
+    return nil
+  end
+
+  -- Get all lines from Claude buffer
+  local lines = vim.api.nvim_buf_get_lines(session.buf, 0, -1, false)
+
+  local code_blocks = {}
+  local in_code_block = false
+  local current_block = {}
+
+  for _, line in ipairs(lines) do
+    if line:match('^```') then
+      if in_code_block then
+        -- End of code block
+        if #current_block > 0 then
+          table.insert(code_blocks, table.concat(current_block, '\n'))
+        end
+        current_block = {}
+        in_code_block = false
+      else
+        -- Start of code block
+        in_code_block = true
+      end
+    elseif in_code_block then
+      table.insert(current_block, line)
+    end
+  end
+
+  return #code_blocks > 0 and code_blocks or nil
+end
+
+--- Replace selection or current line with Claude's code
+---@param session_name string|nil
+---@param block_index number|nil Which code block to use (default: last)
+function M.replace_with_claude(session_name, block_index)
+  local blocks = M.extract_code_blocks(session_name)
+
+  if not blocks then
+    vim.notify('No code blocks found in Claude response', vim.log.levels.WARN)
+    return
+  end
+
+  -- Use last block by default
+  block_index = block_index or #blocks
+
+  if block_index > #blocks then
+    vim.notify('Code block ' .. block_index .. ' not found (only ' .. #blocks .. ' blocks)', vim.log.levels.WARN)
+    return
+  end
+
+  local code = blocks[block_index]
+
+  -- Get visual selection range or current line
+  local start_line, end_line
+  local mode = vim.fn.mode()
+
+  if mode == 'v' or mode == 'V' or mode == '\22' then
+    -- Visual mode - use selection
+    start_line = vim.fn.line("'<") - 1
+    end_line = vim.fn.line("'>")
+  else
+    -- Normal mode - use current line
+    start_line = vim.fn.line('.') - 1
+    end_line = start_line + 1
+  end
+
+  -- Split code into lines
+  local new_lines = vim.split(code, '\n', { plain = true })
+
+  -- Replace selection
+  vim.api.nvim_buf_set_lines(0, start_line, end_line, false, new_lines)
+
+  vim.notify('Replaced with Claude code block ' .. block_index .. ' of ' .. #blocks, vim.log.levels.INFO)
+end
+
+--- Show code block picker (if multiple blocks)
+---@param session_name string|nil
+function M.pick_and_replace(session_name)
+  local blocks = M.extract_code_blocks(session_name)
+
+  if not blocks then
+    vim.notify('No code blocks found in Claude response', vim.log.levels.WARN)
+    return
+  end
+
+  if #blocks == 1 then
+    -- Only one block, use it directly
+    M.replace_with_claude(session_name, 1)
+    return
+  end
+
+  -- Multiple blocks - show picker
+  vim.ui.select(blocks, {
+    prompt = 'Select code block to insert:',
+    format_item = function(item)
+      -- Show first line as preview
+      local first_line = item:match('^[^\n]+') or item
+      return first_line:sub(1, 60) .. (#first_line > 60 and '...' or '')
+    end,
+  }, function(choice, idx)
+    if choice then
+      M.replace_with_claude(session_name, idx)
+    end
+  end)
+end
+
 return M
