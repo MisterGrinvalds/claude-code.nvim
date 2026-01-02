@@ -37,6 +37,7 @@ function M.create_session(name, opts)
   vim.bo[buf].bufhidden = 'hide'
   vim.bo[buf].buflisted = false
   vim.bo[buf].swapfile = false
+  vim.bo[buf].filetype = 'claudecode'
 
   -- Save current buffer to restore later
   local current_buf = vim.api.nvim_get_current_buf()
@@ -70,8 +71,10 @@ function M.create_session(name, opts)
     return nil
   end
 
-  -- Set buffer name
+  -- Set buffer name and variables for identification
   vim.api.nvim_buf_set_name(buf, 'claude-code://' .. name)
+  vim.b[buf].claude_code = true
+  vim.b[buf].claude_session = name
 
   -- Set up buffer-local keymaps
   M.setup_keymaps(buf, name)
@@ -90,9 +93,6 @@ function M.create_session(name, opts)
   }
 
   M.sessions[name] = session
-
-  -- Start state monitoring
-  require('claude-code.state').monitor_session(name)
 
   return session
 end
@@ -210,14 +210,16 @@ function M.update_state(name, state)
     return
   end
 
+  -- Skip if state hasn't changed
+  if session.state == state then
+    return
+  end
+
   session.state = state
   session.last_active = os.time()
 
   -- Update window title if visible
   require('claude-code.window').update_title(name, state)
-
-  -- Trigger status line update
-  vim.cmd('redrawstatus')
 end
 
 --- Send text to a session
@@ -234,6 +236,8 @@ function M.send_to_session(name, text, submit)
   vim.fn.chansend(session.job_id, text)
   if submit ~= false then
     vim.fn.chansend(session.job_id, '\n')
+    -- Mark as processing when user submits
+    require('claude-code.state').on_send(name)
   end
 
   session.last_active = os.time()

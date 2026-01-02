@@ -95,19 +95,30 @@ function M.show_session(name)
   -- Focus window and enter insert mode
   vim.api.nvim_set_current_win(win)
   vim.cmd('startinsert')
+
+  -- Notify state manager
+  require('claude-code.state').on_show(name)
 end
 
 --- Hide the Claude window
 function M.hide_window()
+  -- Get current session name before closing
+  local session_module = require('claude-code.session')
+  local current_name = session_module.current_session
+
   if M.claude_window and vim.api.nvim_win_is_valid(M.claude_window) then
     vim.api.nvim_win_close(M.claude_window, true)
   end
   M.claude_window = nil
 
   -- Mark all sessions as not visible
-  local session_module = require('claude-code.session')
   for _, session in pairs(session_module.sessions) do
     session.is_visible = false
+  end
+
+  -- Notify state manager (triggers buffer refresh)
+  if current_name then
+    require('claude-code.state').on_hide(current_name)
   end
 end
 

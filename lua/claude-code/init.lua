@@ -9,6 +9,7 @@ M.window = require('claude-code.window')
 M.state = require('claude-code.state')
 M.picker_module = require('claude-code.picker')
 M.statusline = require('claude-code.statusline')
+M.sync = require('claude-code.sync')
 
 -- Default configuration
 M.config = {
@@ -19,6 +20,13 @@ M.config = {
   },
   command = 'claude', -- Claude CLI command
   default_session = 'main', -- Auto-created session name
+  statusline = {
+    show_model = true,      -- Show model name (Opus, Sonnet)
+    show_tokens = true,     -- Show token count
+    show_cost = false,      -- Show cost (off by default)
+    show_lines = true,      -- Show lines added/removed
+    format = nil,           -- Custom format function(status) -> string
+  },
 }
 
 --- Setup Claude Code
@@ -33,6 +41,33 @@ function M.setup(opts)
       { '<leader>c', group = '[C]laude Code' },
     })
   end
+
+  -- Initialize statusline with config (watches status & state files)
+  M.statusline.setup(M.config.statusline)
+
+  -- Initialize sync module (watches refresh file for buffer reload)
+  M.sync.setup()
+
+  -- Register user commands
+  vim.api.nvim_create_user_command('ClaudeInstallHooks', function(opts)
+    M.install_hooks(opts.bang)
+  end, { bang = true, desc = 'Install Claude Code hooks (! to force)' })
+
+  vim.api.nvim_create_user_command('ClaudeToggle', function()
+    M.toggle()
+  end, { desc = 'Toggle Claude Code window' })
+
+  vim.api.nvim_create_user_command('ClaudeNew', function(opts)
+    M.new_session(opts.args ~= '' and opts.args or nil)
+  end, { nargs = '?', desc = 'Create new Claude session' })
+
+  vim.api.nvim_create_user_command('ClaudeDelete', function(opts)
+    M.delete_session(opts.args ~= '' and opts.args or nil)
+  end, { nargs = '?', desc = 'Delete Claude session' })
+
+  vim.api.nvim_create_user_command('ClaudePicker', function()
+    M.picker()
+  end, { desc = 'Open Claude session picker' })
 end
 
 --- Toggle Claude window (main/last session)
@@ -65,6 +100,36 @@ end
 --- Show session picker
 function M.picker()
   M.picker_module.show()
+end
+
+--- Delete a Claude session
+---@param name string|nil Session name (prompts if nil)
+function M.delete_session(name)
+  if not name then
+    -- Show picker to select session to delete
+    local sessions = M.session.list_sessions()
+    if #sessions == 0 then
+      vim.notify('No Claude sessions to delete', vim.log.levels.INFO)
+      return
+    end
+
+    vim.ui.select(sessions, {
+      prompt = 'Delete Claude session:',
+      format_item = function(session_name)
+        local session = M.session.get_session(session_name)
+        local state = session and session.state or 'unknown'
+        return session_name .. ' (' .. state .. ')'
+      end,
+    }, function(choice)
+      if choice then
+        M.session.delete_session(choice)
+        vim.notify('Deleted Claude session: ' .. choice, vim.log.levels.INFO)
+      end
+    end)
+  else
+    M.session.delete_session(name)
+    vim.notify('Deleted Claude session: ' .. name, vim.log.levels.INFO)
+  end
 end
 
 --- Get current file context
@@ -154,6 +219,9 @@ end
 --- Send current file to Claude
 ---@param session_name string|nil
 function M.send_file(session_name)
+  -- Auto-save modified buffers so Claude sees latest content
+  M.sync.save_modified_buffers()
+
   local ctx = M.get_file_context()
   if not ctx then
     vim.notify('No file open', vim.log.levels.WARN)
@@ -167,6 +235,9 @@ end
 --- Send visual selection to Claude
 ---@param session_name string|nil
 function M.send_selection(session_name)
+  -- Auto-save modified buffers so Claude sees latest content
+  M.sync.save_modified_buffers()
+
   local selection = M.get_selection()
   if not selection then
     vim.notify('No selection', vim.log.levels.WARN)
@@ -183,6 +254,9 @@ end
 --- Send diagnostics to Claude
 ---@param session_name string|nil
 function M.send_diagnostics(session_name)
+  -- Auto-save modified buffers so Claude sees latest content
+  M.sync.save_modified_buffers()
+
   local diags = M.get_diagnostics()
   if not diags then
     vim.notify('No diagnostics', vim.log.levels.INFO)
@@ -197,11 +271,58 @@ end
 --- Custom prompt input
 ---@param session_name string|nil
 function M.ask(session_name)
+  -- Auto-save modified buffers so Claude sees latest content
+  M.sync.save_modified_buffers()
+
   vim.ui.input({ prompt = 'Ask Claude: ' }, function(input)
     if input and input ~= '' then
       M.send(input, session_name)
     end
   end)
+end
+
+--- Install Claude Code hooks and configuration
+---@param force boolean|nil Force overwrite existing files
+function M.install_hooks(force)
+  -- Find the config directory relative to this plugin
+  local source = debug.getinfo(1, 'S').source:sub(2) -- Remove @ prefix
+  local plugin_dir = vim.fn.fnamemodify(source, ':h:h:h') -- Go up to plugin root
+  local install_script = plugin_dir .. '/config/install.sh'
+
+  if vim.fn.filereadable(install_script) ~= 1 then
+    vim.notify('Install script not found: ' .. install_script, vim.log.levels.ERROR)
+    return
+  end
+
+  local cmd = install_script
+  if force then
+    cmd = cmd .. ' --force'
+  end
+
+  -- Run install script
+  vim.fn.jobstart(cmd, {
+    on_stdout = function(_, data)
+      for _, line in ipairs(data) do
+        if line ~= '' then
+          print(line)
+        end
+      end
+    end,
+    on_stderr = function(_, data)
+      for _, line in ipairs(data) do
+        if line ~= '' then
+          vim.notify(line, vim.log.levels.WARN)
+        end
+      end
+    end,
+    on_exit = function(_, code)
+      if code == 0 then
+        vim.notify('Claude Code hooks installed! Restart Claude CLI to activate.', vim.log.levels.INFO)
+      else
+        vim.notify('Install failed with code ' .. code, vim.log.levels.ERROR)
+      end
+    end,
+  })
 end
 
 --- Get all session states (for debugging)

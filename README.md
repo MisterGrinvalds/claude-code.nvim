@@ -1,211 +1,216 @@
 # claude-code.nvim
 
-A Neovim plugin for seamless integration with [Claude Code](https://claude.ai/code) CLI.
-
-Features a toggleable floating window, context injection commands, and a Telescope-powered command palette.
+Neovim integration for [Claude Code](https://claude.ai/code) CLI with multi-session support, real-time status, and automatic buffer synchronization.
 
 ## Features
 
-- **Toggle Window**: Floating or split window running Claude Code CLI
-- **Context Injection**: Send files, selections, and LSP diagnostics to Claude
-- **Command Palette**: Telescope picker with common AI coding actions
-- **Native Commands**: User commands available in command mode (`:ClaudeToggle`, etc.)
+- **Multi-session support** - Run multiple Claude instances with named sessions
+- **Lazygit-style floating window** - 90% screen coverage, toggle with a keymap
+- **Real-time statusline** - Shows model, tokens, lines changed, and state
+- **Automatic buffer sync** - Saves before sending context, refreshes after Claude writes
+- **Context injection** - Send files, selections, or diagnostics to Claude
+- **Code replacement** - Extract code blocks from Claude and apply to your buffer
 
 ## Requirements
 
-- Neovim >= 0.8
+- Neovim 0.9+
 - [Claude Code CLI](https://claude.ai/code) installed and authenticated
-- Optional: [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim) for command palette
-- Optional: [which-key.nvim](https://github.com/folke/which-key.nvim) for keymap hints
+- [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim) (for session picker)
+- [jq](https://stedolan.github.io/jq/) (for statusline bridge)
+- A [Nerd Font](https://www.nerdfonts.com/) (for status icons)
 
 ## Installation
 
-### [lazy.nvim](https://github.com/folke/lazy.nvim)
+### Plugin (lazy.nvim)
 
 ```lua
 {
-  'YOUR_USERNAME/claude-code.nvim',
-  dependencies = {
-    'nvim-telescope/telescope.nvim', -- optional
-  },
+  'your-username/claude-code.nvim',
+  dependencies = { 'nvim-telescope/telescope.nvim' },
   config = function()
     require('claude-code').setup({
-      -- your configuration
+      window = {
+        width = 0.9,
+        height = 0.9,
+        border = 'rounded',
+      },
+      command = 'claude',
+      default_session = 'main',
     })
   end,
 }
 ```
 
-### [packer.nvim](https://github.com/wbthomason/packer.nvim)
+### Claude Code Hooks
+
+The plugin includes hooks that integrate with Claude Code CLI for real-time status updates and automatic buffer refresh.
+
+**Install from Neovim:**
+```vim
+:ClaudeInstallHooks
+```
+
+**Or from terminal:**
+```bash
+~/.local/share/nvim/lazy/claude-code.nvim/config/install.sh
+```
+
+This installs:
+- Status line bridge script (~/.claude/statusline-bridge.sh)
+- Hook scripts (~/.claude/hooks/)
+- Reference settings (~/.claude/settings.json if none exists)
+
+**Restart Claude Code CLI after installing hooks.**
+
+## Keymaps
+
+Add these to your config:
 
 ```lua
-use {
-  'YOUR_USERNAME/claude-code.nvim',
-  requires = { 'nvim-telescope/telescope.nvim' },
-  config = function()
-    require('claude-code').setup()
-  end
+-- Toggle Claude window
+vim.keymap.set('n', '<leader>cc', function()
+  require('claude-code').toggle()
+end, { desc = 'Claude Code toggle' })
+
+-- Session management
+vim.keymap.set('n', '<leader>cp', function()
+  require('claude-code').picker()
+end, { desc = 'Claude session picker' })
+
+vim.keymap.set('n', '<leader>cn', function()
+  require('claude-code').new_session()
+end, { desc = 'Claude new session' })
+
+vim.keymap.set('n', '<leader>cx', function()
+  require('claude-code').delete_session()
+end, { desc = 'Claude delete session' })
+
+-- Context injection
+vim.keymap.set('n', '<leader>cf', function()
+  require('claude-code').send_file()
+end, { desc = 'Send file to Claude' })
+
+vim.keymap.set('v', '<leader>cs', function()
+  require('claude-code').send_selection()
+end, { desc = 'Send selection to Claude' })
+
+vim.keymap.set('n', '<leader>cd', function()
+  require('claude-code').send_diagnostics()
+end, { desc = 'Send diagnostics to Claude' })
+
+vim.keymap.set('n', '<leader>ca', function()
+  require('claude-code').ask()
+end, { desc = 'Ask Claude' })
+
+-- Code replacement
+vim.keymap.set({ 'n', 'v' }, '<leader>cr', function()
+  require('claude-code').pick_and_replace()
+end, { desc = 'Replace with Claude code' })
+
+-- Manual buffer refresh
+vim.keymap.set('n', '<leader>cb', function()
+  require('claude-code').sync.force_refresh()
+end, { desc = 'Refresh buffers' })
+```
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `:ClaudeToggle` | Toggle Claude window |
+| `:ClaudeNew [name]` | Create new session |
+| `:ClaudeDelete [name]` | Delete session |
+| `:ClaudePicker` | Open session picker |
+| `:ClaudeInstallHooks` | Install Claude CLI hooks |
+| `:ClaudeInstallHooks!` | Force reinstall hooks |
+
+## Statusline Integration
+
+### Lualine
+
+```lua
+{
+  'nvim-lualine/lualine.nvim',
+  opts = {
+    sections = {
+      lualine_x = {
+        {
+          function()
+            local ok, statusline = pcall(require, 'claude-code.statusline')
+            if ok then return statusline.get_status() end
+            return ''
+          end,
+          color = function()
+            local ok, statusline = pcall(require, 'claude-code.statusline')
+            if ok then return { fg = statusline.get_color() } end
+            return {}
+          end,
+          cond = function()
+            local ok, statusline = pcall(require, 'claude-code.statusline')
+            return ok and statusline.get_cached_status() ~= nil
+          end,
+        },
+      },
+    },
+  },
 }
 ```
+
+### Status States
+
+| State | Icon | Color | When |
+|-------|------|-------|------|
+| idle | 󰚩 | Gray | No activity |
+| processing | 󰦖 | Yellow | Claude is working |
+| waiting | 󰋗 | Peach | Needs user input/permission |
+| done | 󰄬 | Green | Task complete (3s) |
+
+## How It Works
+
+### Hook Flow
+
+```
+UserPromptSubmit ──────────────▶ "processing"
+        ↓
+PreToolUse ─────────────────────▶ "processing"
+        ↓
+Notification(permission_prompt) ─▶ "waiting"
+        ↓
+   [User approves]
+        ↓
+PreToolUse ─────────────────────▶ "processing"
+        ↓
+PostToolUse(Write|Edit) ────────▶ buffer refresh
+        ↓
+Stop ───────────────────────────▶ "done"
+```
+
+### Buffer Synchronization
+
+1. **Before sending context**: Auto-saves all modified buffers
+2. **After Claude writes**: PostToolUse hook triggers :checktime
+3. **Manual refresh**: <leader>cb or :lua require('claude-code').sync.force_refresh()
 
 ## Configuration
 
 ```lua
 require('claude-code').setup({
   window = {
-    position = 'float', -- 'float', 'right', 'left', 'bottom'
-    width = 0.4,        -- 40% of screen width
-    height = 0.8,       -- 80% of screen height
-    border = 'rounded', -- border style
-    title = ' Claude Code ',
+    width = 0.9,      -- 90% of screen
+    height = 0.9,
+    border = 'rounded',
   },
-  keymaps = {
-    toggle = '<leader>cc',          -- Toggle Claude Code window
-    send_file = '<leader>cf',       -- Send current file
-    send_selection = '<leader>cs',  -- Send visual selection
-    send_diagnostics = '<leader>cd', -- Send LSP diagnostics
-    send_buffer = '<leader>cb',     -- Send buffer with full context
-    command_palette = '<leader>cp', -- Open command palette
-    ask = '<leader>ca',             -- Ask Claude (prompt input)
-  },
-  command = 'claude',   -- CLI command to run
-  auto_scroll = true,   -- Auto-scroll to bottom on new output
-  close_on_exit = true, -- Close window when Claude exits
-  start_insert = true,  -- Start in insert mode
-})
-```
-
-### Disable Keymaps
-
-To disable specific keymaps, set them to `false`:
-
-```lua
-require('claude-code').setup({
-  keymaps = {
-    toggle = '<leader>cc',
-    send_file = false, -- disable this keymap
+  command = 'claude', -- CLI command
+  default_session = 'main',
+  statusline = {
+    show_model = true,   -- Show "Opus", "Sonnet"
+    show_tokens = true,  -- Show token count
+    show_cost = false,   -- Show cost (off by default)
+    show_lines = true,   -- Show +added/-removed
   },
 })
 ```
-
-## Keybindings
-
-| Key | Mode | Action |
-|-----|------|--------|
-| `<leader>cc` | Normal | Toggle Claude Code window |
-| `<leader>cf` | Normal | Send current file to Claude |
-| `<leader>cs` | Visual | Send visual selection to Claude |
-| `<leader>cd` | Normal | Send LSP diagnostics to Claude |
-| `<leader>cb` | Normal | Send buffer with full context |
-| `<leader>cp` | Normal | Open command palette |
-| `<leader>ca` | Normal | Ask Claude (prompt input) |
-
-## Commands
-
-| Command | Description |
-|---------|-------------|
-| `:ClaudeToggle` | Toggle the Claude Code window |
-| `:ClaudeOpen` | Open the Claude Code window |
-| `:ClaudeClose` | Close the Claude Code window |
-| `:ClaudeSendFile` | Send current file to Claude |
-| `:ClaudeSendDiagnostics` | Send LSP diagnostics to Claude |
-| `:ClaudeSendBuffer` | Send buffer with full context |
-| `:ClaudeCommands` | Open command palette |
-| `:ClaudeAsk [prompt]` | Ask Claude a question |
-
-## Command Palette
-
-The command palette (`<leader>cp` or `:ClaudeCommands`) includes:
-
-- Toggle Claude Code
-- Send Current File
-- Send Selection
-- Send Diagnostics
-- Send Buffer with Context
-- Ask: Explain this code
-- Ask: Find bugs
-- Ask: Optimize
-- Ask: Add tests
-- Ask: Refactor
-- Ask: Add documentation
-
-## API
-
-You can also use the plugin programmatically:
-
-```lua
-local claude = require('claude-code')
-
--- Toggle window
-claude.toggle()
-
--- Open/close
-claude.open()
-claude.close()
-
--- Send text
-claude.send("Explain this code")
-
--- Send context
-claude.send_file()
-claude.send_selection()
-claude.send_diagnostics()
-claude.send_buffer_context()
-
--- Get context (returns strings)
-local file_ctx = claude.get_file_context()
-local selection = claude.get_selection()
-local diagnostics = claude.get_diagnostics()
-```
-
-## Window Positions
-
-### Float (default)
-
-```
-┌────────────────────────────────────────────┐
-│                                    ┌──────┐│
-│                                    │Claude││
-│            Editor                  │Code  ││
-│                                    │      ││
-│                                    └──────┘│
-└────────────────────────────────────────────┘
-```
-
-### Right Split
-
-```
-┌────────────────────┬───────────────────────┐
-│                    │                       │
-│      Editor        │     Claude Code       │
-│                    │                       │
-└────────────────────┴───────────────────────┘
-```
-
-### Bottom Split
-
-```
-┌────────────────────────────────────────────┐
-│                                            │
-│                  Editor                    │
-│                                            │
-├────────────────────────────────────────────┤
-│               Claude Code                  │
-└────────────────────────────────────────────┘
-```
-
-## Integration with Ghostty
-
-When using the [Ghostty workflow](https://danielmiessler.com/blog/claude-code-neovim-ghostty-integration) (left: Claude CLI, right: Neovim), this plugin complements it:
-
-- Use the floating window for quick questions without leaving Neovim
-- Use `Ctrl+hjkl` to switch to the Ghostty Claude pane for longer sessions
-- Context injection works regardless of which Claude instance you're using
 
 ## License
 
 MIT
-
-## Contributing
-
-Contributions are welcome! Please open an issue or submit a pull request.
