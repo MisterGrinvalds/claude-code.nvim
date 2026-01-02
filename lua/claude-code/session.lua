@@ -101,21 +101,24 @@ end
 ---@param buf number
 ---@param name string
 function M.setup_keymaps(buf, name)
-  -- Double-Escape to exit terminal mode
-  vim.keymap.set('t', '<Esc><Esc>', '<C-\\><C-n>', { buffer = buf, desc = 'Exit terminal mode' })
+  -- Single Escape: Exit terminal mode to normal mode
+  vim.keymap.set('t', '<Esc>', '<C-\\><C-n>', { buffer = buf, desc = 'Exit terminal mode' })
 
-  -- Ctrl+] alternative exit
-  vim.keymap.set('t', '<C-]>', '<C-\\><C-n>', { buffer = buf, desc = 'Exit terminal mode' })
-
-  -- Quick hide window
-  vim.keymap.set('t', '<C-\\><C-c>', function()
-    vim.cmd('stopinsert')
+  -- In normal mode, Esc hides the window
+  vim.keymap.set('n', '<Esc>', function()
     require('claude-code.window').hide_window()
   end, { buffer = buf, desc = 'Hide Claude window' })
+
+  -- Ctrl+] alternative exit from terminal mode
+  vim.keymap.set('t', '<C-]>', '<C-\\><C-n>', { buffer = buf, desc = 'Exit terminal mode' })
 
   -- Quick toggle picker
   vim.keymap.set('t', '<C-\\><C-p>', function()
     vim.cmd('stopinsert')
+    require('claude-code').picker()
+  end, { buffer = buf, desc = 'Claude session picker' })
+
+  vim.keymap.set('n', '<C-\\><C-p>', function()
     require('claude-code').picker()
   end, { buffer = buf, desc = 'Claude session picker' })
 end
