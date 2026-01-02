@@ -101,16 +101,22 @@ end
 ---@param buf number
 ---@param name string
 function M.setup_keymaps(buf, name)
-  -- Single Escape: Exit terminal mode to normal mode
-  vim.keymap.set('t', '<Esc>', '<C-\\><C-n>', { buffer = buf, desc = 'Exit terminal mode' })
+  -- Esc in terminal mode: Pass to Claude (don't intercept!)
+  -- Claude needs Esc for its own UI
+  -- To exit terminal mode, use Ctrl-\ Ctrl-n (standard Neovim)
 
-  -- In normal mode, Esc hides the window
-  vim.keymap.set('n', '<Esc>', function()
+  -- In normal mode: q to close (standard preview/terminal pattern)
+  vim.keymap.set('n', 'q', function()
     require('claude-code.window').hide_window()
   end, { buffer = buf, desc = 'Hide Claude window' })
 
-  -- Ctrl+] alternative exit from terminal mode
-  vim.keymap.set('t', '<C-]>', '<C-\\><C-n>', { buffer = buf, desc = 'Exit terminal mode' })
+  -- Alternative: Ctrl-c to close (also standard)
+  vim.keymap.set('n', '<C-c>', function()
+    require('claude-code.window').hide_window()
+  end, { buffer = buf, desc = 'Hide Claude window' })
+
+  -- Exit terminal mode with standard Neovim key
+  vim.keymap.set('t', '<C-\\><C-n>', '<C-\\><C-n>', { buffer = buf, desc = 'Exit terminal mode' })
 
   -- Quick toggle picker
   vim.keymap.set('t', '<C-\\><C-p>', function()
@@ -121,6 +127,11 @@ function M.setup_keymaps(buf, name)
   vim.keymap.set('n', '<C-\\><C-p>', function()
     require('claude-code').picker()
   end, { buffer = buf, desc = 'Claude session picker' })
+
+  -- Quick toggle with Ctrl-c from terminal mode
+  vim.keymap.set('t', '<C-c>', function()
+    require('claude-code.window').hide_window()
+  end, { buffer = buf, desc = 'Hide Claude window' })
 end
 
 --- Get or create session (auto-create if missing)
