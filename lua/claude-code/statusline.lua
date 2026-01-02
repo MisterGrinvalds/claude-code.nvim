@@ -4,11 +4,14 @@
 
 local M = {}
 
--- Status file written by bridge script (model, tokens, lines)
-local STATUS_FILE = '/tmp/claude-code-status.json'
+-- Get project-specific file paths (supports multiple instances)
+local function get_status_file()
+  return vim.fn.getcwd() .. '/.claude-status.json'
+end
 
--- State file written by hooks (processing, done)
-local STATE_FILE = '/tmp/claude-state.json'
+local function get_state_file()
+  return vim.fn.getcwd() .. '/.claude-state.json'
+end
 
 -- File watchers
 local status_watcher = nil
@@ -64,7 +67,7 @@ end
 --- Read Claude status from temp file
 ---@return table|nil Status data or nil if unavailable
 function M.read_status()
-  local f = io.open(STATUS_FILE, 'r')
+  local f = io.open(get_status_file(), 'r')
   if not f then
     return nil
   end
@@ -79,7 +82,6 @@ function M.read_status()
   local ok, data = pcall(vim.json.decode, content)
   if ok and data then
     cached_status = data
-    last_update = os.time()
     return data
   end
 
@@ -95,7 +97,7 @@ end
 --- Read state from hook-written file
 ---@return table|nil State data
 function M.read_state()
-  local f = io.open(STATE_FILE, 'r')
+  local f = io.open(get_state_file(), 'r')
   if not f then
     return nil
   end
@@ -256,11 +258,11 @@ end
 --- Start watching status and state files
 function M.start_watcher()
   if not status_watcher then
-    status_watcher = start_file_watcher(STATUS_FILE, on_status_update)
+    status_watcher = start_file_watcher(get_status_file(), on_status_update)
   end
 
   if not state_watcher then
-    state_watcher = start_file_watcher(STATE_FILE, on_state_update)
+    state_watcher = start_file_watcher(get_state_file(), on_state_update)
   end
 
   -- Initial reads

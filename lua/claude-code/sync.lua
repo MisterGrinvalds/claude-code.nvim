@@ -4,8 +4,10 @@
 
 local M = {}
 
--- Refresh file written by on-file-write.sh hook
-local REFRESH_FILE = '/tmp/claude-refresh'
+-- Get project-specific refresh file (supports multiple instances)
+local function get_refresh_file()
+  return vim.fn.getcwd() .. '/.claude-refresh'
+end
 
 -- File watcher
 local refresh_watcher = nil
@@ -69,10 +71,11 @@ function M.start_watcher()
     return -- Already watching
   end
 
-  ensure_file(REFRESH_FILE)
+  local refresh_file = get_refresh_file()
+  ensure_file(refresh_file)
 
   refresh_watcher = vim.loop.new_fs_event()
-  local ok = refresh_watcher:start(REFRESH_FILE, {}, vim.schedule_wrap(function(err, filename, events)
+  local ok = refresh_watcher:start(refresh_file, {}, vim.schedule_wrap(function(err, filename, events)
     if not err then
       on_file_write()
     end

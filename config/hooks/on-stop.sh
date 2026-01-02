@@ -4,4 +4,6 @@
 #
 # Install: Copy to ~/.claude/hooks/on-stop.sh and chmod +x
 
-echo '{"state": "done", "timestamp": '$(date +%s)'}' > /tmp/claude-state.json
+# Use project-specific state file (supports multiple instances)
+STATE_DIR="${CLAUDE_PROJECT_DIR:-/tmp}"
+echo '{"state": "done", "timestamp": '$(date +%s)'}' > "${STATE_DIR}/.claude-state.json"

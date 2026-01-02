@@ -4,4 +4,6 @@
 #
 # Install: Copy to ~/.claude/hooks/on-file-write.sh and chmod +x
 
-date +%s > /tmp/claude-refresh
+# Use project-specific refresh file (supports multiple instances)
+STATE_DIR="${CLAUDE_PROJECT_DIR:-/tmp}"
+date +%s > "${STATE_DIR}/.claude-refresh"
