@@ -11,6 +11,9 @@ install: ## Symlink hooks and statusline-bridge to ~/.claude
 	@echo "Installing claude-code.nvim configuration..."
 	@mkdir -p $(HOOKS_DIR)
 
+	@# Ensure source scripts are executable
+	@chmod +x $(CONFIG_DIR)/hooks/*.sh $(CONFIG_DIR)/statusline-bridge.sh
+
 	@# Symlink hooks
 	@for hook in $(CONFIG_DIR)/hooks/*.sh; do \
 		name=$$(basename $$hook); \
