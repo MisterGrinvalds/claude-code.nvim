@@ -1,9 +1,19 @@
 #!/bin/bash
 # Claude Code Hook: Notification (permission_prompt)
 # Sets state to "waiting" when Claude needs user permission
-#
-# Install: Copy to ~/.claude/hooks/on-permission.sh and chmod +x
 
-# Use project-specific state file (supports multiple instances)
-STATE_DIR="${CLAUDE_PROJECT_DIR:-/tmp}"
-echo '{"state": "waiting", "timestamp": '$(date +%s)'}' > "${STATE_DIR}/.claude-state.json"
+# Read hook input from stdin
+INPUT=$(cat)
+SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
+
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
+mkdir -p "$PROJECT_DIR/.claude"
+
+# Use session-specific state file if session_id available
+if [ -n "$SESSION_ID" ]; then
+  STATE_FILE="$PROJECT_DIR/.claude/state-${SESSION_ID}.json"
+else
+  STATE_FILE="$PROJECT_DIR/.claude/state.json"
+fi
+
+echo '{"state": "waiting", "session_id": "'"$SESSION_ID"'", "timestamp": '$(date +%s)'}' > "$STATE_FILE"

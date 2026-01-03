@@ -4,23 +4,53 @@
 
 local M = {}
 
--- Get project-specific file paths (supports multiple instances)
-local function get_status_file()
-  return vim.fn.getcwd() .. '/.claude-status.json'
-end
+-- Timing constants
+local POLL_INTERVAL_MS = 200     -- Poll files every 200ms
+local DONE_DISPLAY_MS = 2000     -- Show "done" state for 2 seconds
+local PERMISSION_TIMEOUT_MS = 60000  -- Recover from stuck "waiting" after 60s
 
+-- Project-local state files (in <cwd>/.claude/)
+-- Finds the most recently modified state file (supports multiple sessions)
 local function get_state_file()
-  return vim.fn.getcwd() .. '/.claude-state.json'
+  local claude_dir = vim.fn.getcwd() .. '/.claude'
+  local pattern = claude_dir .. '/state*.json'
+  local files = vim.fn.glob(pattern, false, true)
+
+  if #files == 0 then
+    return claude_dir .. '/state.json'  -- Default fallback
+  end
+
+  -- Find most recently modified
+  local newest_file = files[1]
+  local newest_mtime = 0
+
+  for _, file in ipairs(files) do
+    local stat = vim.loop.fs_stat(file)
+    if stat and stat.mtime.sec > newest_mtime then
+      newest_mtime = stat.mtime.sec
+      newest_file = file
+    end
+  end
+
+  return newest_file
 end
 
--- File watchers
-local status_watcher = nil
-local state_watcher = nil
+local function get_status_file()
+  return vim.fn.getcwd() .. '/.claude/status.json'
+end
+
+-- Polling timer
+local poll_timer = nil
+
+-- Last modification times (to detect changes)
+local last_status_mtime = 0
+local last_state_mtime = 0
 
 -- Cached data
 local cached_status = nil  -- From STATUS_FILE (model, tokens, etc)
 local cached_state = nil   -- From STATE_FILE (processing, done)
 local done_timer = nil     -- Timer to clear "done" state
+local permission_timer = nil  -- Timer to recover from stuck "waiting"
 
 --- Nerdfont icons for display
 M.icons = {
@@ -198,95 +228,128 @@ function M.get_status()
   return table.concat(parts, ' | ')
 end
 
+--- Trigger lualine refresh if available
+local function refresh_lualine()
+  local ok, lualine = pcall(require, 'lualine')
+  if ok and lualine.refresh then
+    lualine.refresh()
+  end
+end
+
 --- Callback when status file changes
 local function on_status_update()
   M.read_status()
+  refresh_lualine()
 end
 
 --- Callback when state file changes
 local function on_state_update()
   M.read_state()
+  refresh_lualine()
 
-  -- If state is "done", clear it after 3 seconds
+  -- Handle "done" state: clear after 2 seconds
   if cached_state and cached_state.state == 'done' then
     if done_timer then
       done_timer:stop()
     end
     done_timer = vim.defer_fn(function()
       cached_state = { state = 'idle' }
-    end, 3000)
+      refresh_lualine()
+    end, DONE_DISPLAY_MS)
   end
-end
 
---- Ensure file exists, create if not
----@param path string File path
-local function ensure_file(path)
-  local f = io.open(path, 'r')
-  if f then
-    f:close()
+  -- Handle "waiting" state: recover after 60 seconds (permission denial fallback)
+  if cached_state and cached_state.state == 'waiting' then
+    if permission_timer then
+      permission_timer:stop()
+    end
+    permission_timer = vim.defer_fn(function()
+      -- Only reset if still in waiting state
+      if cached_state and cached_state.state == 'waiting' then
+        cached_state = { state = 'idle' }
+        refresh_lualine()
+      end
+    end, PERMISSION_TIMEOUT_MS)
   else
-    f = io.open(path, 'w')
-    if f then
-      f:write('{}')
-      f:close()
+    -- Clear permission timer if not in waiting state
+    if permission_timer then
+      permission_timer:stop()
+      permission_timer = nil
     end
   end
 end
 
---- Start a file watcher
----@param path string File path to watch
----@param callback function Callback on change
----@return userdata|nil Watcher handle
-local function start_file_watcher(path, callback)
-  ensure_file(path)
-
-  local w = vim.loop.new_fs_event()
-  local ok = w:start(path, {}, vim.schedule_wrap(function(err, filename, events)
-    if not err then
-      callback()
-    end
-  end))
-
-  if not ok then
-    w:close()
-    return nil
+--- Get file modification time (0 if file doesn't exist)
+---@param path string File path
+---@return number Modification time in seconds
+local function get_mtime(path)
+  local stat = vim.loop.fs_stat(path)
+  if stat then
+    return stat.mtime.sec
   end
-
-  return w
+  return 0
 end
 
---- Start watching status and state files
+-- Track which state file we're watching
+local current_state_file = nil
+
+--- Poll for file changes
+local function poll_files()
+  local status_mtime = get_mtime(get_status_file())
+  local state_file = get_state_file()
+  local state_mtime = get_mtime(state_file)
+
+  -- Check if status file changed
+  if status_mtime > last_status_mtime then
+    last_status_mtime = status_mtime
+    on_status_update()
+  end
+
+  -- Check if state file changed (or if we switched to a different session's file)
+  if state_mtime > last_state_mtime or state_file ~= current_state_file then
+    last_state_mtime = state_mtime
+    current_state_file = state_file
+    on_state_update()
+  end
+end
+
+--- Start polling for status and state file changes
 function M.start_watcher()
-  if not status_watcher then
-    status_watcher = start_file_watcher(get_status_file(), on_status_update)
+  -- Ensure local .claude directory exists
+  vim.fn.mkdir(vim.fn.getcwd() .. '/.claude', 'p')
+
+  -- Stop existing timer if any
+  if poll_timer then
+    poll_timer:stop()
+    poll_timer:close()
   end
 
-  if not state_watcher then
-    state_watcher = start_file_watcher(get_state_file(), on_state_update)
-  end
+  -- Create polling timer
+  poll_timer = vim.loop.new_timer()
+  poll_timer:start(0, POLL_INTERVAL_MS, vim.schedule_wrap(poll_files))
 
   -- Initial reads
   M.read_status()
   M.read_state()
 end
 
---- Stop watching files
+--- Stop polling
 function M.stop_watcher()
-  if status_watcher then
-    status_watcher:stop()
-    status_watcher:close()
-    status_watcher = nil
+  if poll_timer then
+    poll_timer:stop()
+    poll_timer:close()
+    poll_timer = nil
   end
 
-  if state_watcher then
-    state_watcher:stop()
-    state_watcher:close()
-    state_watcher = nil
-  end
-
+  -- Clean up all timers
   if done_timer then
     done_timer:stop()
     done_timer = nil
+  end
+
+  if permission_timer then
+    permission_timer:stop()
+    permission_timer = nil
   end
 end
 

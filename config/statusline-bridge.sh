@@ -4,9 +4,9 @@
 #
 # Install: Copy to ~/.claude/statusline-bridge.sh and chmod +x
 
-# Use project-specific status file (supports multiple instances)
-STATE_DIR="${CLAUDE_PROJECT_DIR:-/tmp}"
-STATUS_FILE="${STATE_DIR}/.claude-status.json"
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
+STATUS_FILE="$PROJECT_DIR/.claude/status.json"
+mkdir -p "$PROJECT_DIR/.claude"
 
 # Read JSON from stdin
 input=$(cat)

@@ -1,10 +1,20 @@
 #!/bin/bash
 # Claude Code Hook: PreToolUse
 # Sets state to "processing" when Claude starts using a tool
-# This handles: (1) initial tool use, (2) resuming after permission granted
-#
-# Install: Copy to ~/.claude/hooks/on-tool-start.sh and chmod +x
+# Critical: Handles waiting→processing transition after permission granted
 
-# Use project-specific state file (supports multiple instances)
-STATE_DIR="${CLAUDE_PROJECT_DIR:-/tmp}"
-echo '{"state": "processing", "timestamp": '$(date +%s)'}' > "${STATE_DIR}/.claude-state.json"
+# Read hook input from stdin
+INPUT=$(cat)
+SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
+
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
+mkdir -p "$PROJECT_DIR/.claude"
+
+# Use session-specific state file if session_id available
+if [ -n "$SESSION_ID" ]; then
+  STATE_FILE="$PROJECT_DIR/.claude/state-${SESSION_ID}.json"
+else
+  STATE_FILE="$PROJECT_DIR/.claude/state.json"
+fi
+
+echo '{"state": "processing", "session_id": "'"$SESSION_ID"'", "timestamp": '$(date +%s)'}' > "$STATE_FILE"

@@ -4,13 +4,38 @@
 
 local M = {}
 
--- Get project-specific refresh file (supports multiple instances)
+-- Timing constants
+local POLL_INTERVAL_MS = 200  -- Poll file every 200ms
+
+-- Project-local refresh file (finds most recent, supports multiple sessions)
 local function get_refresh_file()
-  return vim.fn.getcwd() .. '/.claude-refresh'
+  local claude_dir = vim.fn.getcwd() .. '/.claude'
+  local pattern = claude_dir .. '/refresh*'
+  local files = vim.fn.glob(pattern, false, true)
+
+  if #files == 0 then
+    return claude_dir .. '/refresh'  -- Default fallback
+  end
+
+  -- Find most recently modified
+  local newest_file = files[1]
+  local newest_mtime = 0
+
+  for _, file in ipairs(files) do
+    local stat = vim.loop.fs_stat(file)
+    if stat and stat.mtime.sec > newest_mtime then
+      newest_mtime = stat.mtime.sec
+      newest_file = file
+    end
+  end
+
+  return newest_file
 end
 
--- File watcher
-local refresh_watcher = nil
+-- Polling timer
+local poll_timer = nil
+local last_mtime = 0
+local current_refresh_file = nil
 
 --- Save all modified buffers to disk
 --- Called before sending context to Claude so it reads the latest content
@@ -50,49 +75,54 @@ local function on_file_write()
   vim.cmd('silent! checktime')
 end
 
---- Ensure file exists, create if not
+--- Get file modification time (0 if file doesn't exist)
 ---@param path string File path
-local function ensure_file(path)
-  local f = io.open(path, 'r')
-  if f then
-    f:close()
-  else
-    f = io.open(path, 'w')
-    if f then
-      f:write('')
-      f:close()
-    end
+---@return number Modification time in seconds
+local function get_mtime(path)
+  local stat = vim.loop.fs_stat(path)
+  if stat then
+    return stat.mtime.sec
   end
+  return 0
 end
 
---- Start watching the refresh file
-function M.start_watcher()
-  if refresh_watcher then
-    return -- Already watching
-  end
-
+--- Poll for refresh file changes
+local function poll_refresh()
   local refresh_file = get_refresh_file()
-  ensure_file(refresh_file)
+  local mtime = get_mtime(refresh_file)
 
-  refresh_watcher = vim.loop.new_fs_event()
-  local ok = refresh_watcher:start(refresh_file, {}, vim.schedule_wrap(function(err, filename, events)
-    if not err then
+  -- Trigger if file changed or if we switched to a different session's file
+  if mtime > last_mtime or refresh_file ~= current_refresh_file then
+    last_mtime = mtime
+    current_refresh_file = refresh_file
+    if mtime > 0 then  -- Only trigger if file exists
       on_file_write()
     end
-  end))
-
-  if not ok then
-    refresh_watcher:close()
-    refresh_watcher = nil
   end
 end
 
---- Stop watching the refresh file
+--- Start polling the refresh file
+function M.start_watcher()
+  -- Ensure local .claude directory exists
+  vim.fn.mkdir(vim.fn.getcwd() .. '/.claude', 'p')
+
+  -- Stop existing timer if any
+  if poll_timer then
+    poll_timer:stop()
+    poll_timer:close()
+  end
+
+  -- Create polling timer
+  poll_timer = vim.loop.new_timer()
+  poll_timer:start(0, POLL_INTERVAL_MS, vim.schedule_wrap(poll_refresh))
+end
+
+--- Stop polling
 function M.stop_watcher()
-  if refresh_watcher then
-    refresh_watcher:stop()
-    refresh_watcher:close()
-    refresh_watcher = nil
+  if poll_timer then
+    poll_timer:stop()
+    poll_timer:close()
+    poll_timer = nil
   end
 end
 

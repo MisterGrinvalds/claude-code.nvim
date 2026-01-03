@@ -29,6 +29,7 @@ fi
 # Create directories
 info "Creating directories..."
 mkdir -p "$HOOKS_DIR"
+mkdir -p "$CLAUDE_DIR/state"
 
 # Install hooks
 info "Installing hooks..."
