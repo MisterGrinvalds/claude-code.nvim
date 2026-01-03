@@ -5,13 +5,12 @@
     "padding": 0
   },
   "hooks": {
-    "PreToolUse": [
+    "SessionStart": [
       {
-        "matcher": "",
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/hooks/on-tool-start.sh"
+            "command": "~/.claude/hooks/state-hook.sh"
           }
         ]
       }
@@ -21,18 +20,40 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/hooks/on-prompt.sh"
+            "command": "~/.claude/hooks/state-hook.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/state-hook.sh"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/state-hook.sh"
           }
         ]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "Write|Edit|MultiEdit",
+        "matcher": "",
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/hooks/on-file-write.sh"
+            "command": "~/.claude/hooks/state-hook.sh"
           }
         ]
       }
@@ -42,18 +63,27 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/hooks/on-stop.sh"
+            "command": "~/.claude/hooks/state-hook.sh"
           }
         ]
       }
     ],
-    "Notification": [
+    "SubagentStop": [
       {
-        "matcher": "permission_prompt",
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/hooks/on-permission.sh"
+            "command": "~/.claude/hooks/state-hook.sh"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/state-hook.sh"
           }
         ]
       }

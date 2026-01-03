@@ -1,11 +1,10 @@
 -- Claude Code status line integration
 -- Reads real-time status from Claude CLI via bridge script
--- Uses hooks for accurate state detection
+-- Uses fs_event for low-latency file change detection (~1-10ms vs 200ms polling)
 
 local M = {}
 
 -- Timing constants
-local POLL_INTERVAL_MS = 200     -- Poll files every 200ms
 local DONE_DISPLAY_MS = 2000     -- Show "done" state for 2 seconds
 local PERMISSION_TIMEOUT_MS = 60000  -- Recover from stuck "waiting" after 60s
 
@@ -39,12 +38,12 @@ local function get_status_file()
   return vim.fn.getcwd() .. '/.claude/status.json'
 end
 
--- Polling timer
-local poll_timer = nil
+local function get_claude_dir()
+  return vim.fn.getcwd() .. '/.claude'
+end
 
--- Last modification times (to detect changes)
-local last_status_mtime = 0
-local last_state_mtime = 0
+-- File system event watcher handle
+local fs_event_handle = nil
 
 -- Cached data
 local cached_status = nil  -- From STATUS_FILE (model, tokens, etc)
@@ -279,66 +278,57 @@ local function on_state_update()
   end
 end
 
---- Get file modification time (0 if file doesn't exist)
----@param path string File path
----@return number Modification time in seconds
-local function get_mtime(path)
-  local stat = vim.loop.fs_stat(path)
-  if stat then
-    return stat.mtime.sec
+--- Handle file system events on .claude directory
+---@param err string|nil Error message if any
+---@param filename string Name of the changed file
+---@param events table Event flags (change, rename)
+local function on_fs_event(err, filename, events)
+  if err then
+    return
   end
-  return 0
+
+  -- Must schedule to safely call Neovim APIs from libuv callback
+  vim.schedule(function()
+    if filename == 'status.json' then
+      on_status_update()
+    elseif filename and filename:match('^state.*%.json$') then
+      on_state_update()
+    end
+  end)
 end
 
--- Track which state file we're watching
-local current_state_file = nil
-
---- Poll for file changes
-local function poll_files()
-  local status_mtime = get_mtime(get_status_file())
-  local state_file = get_state_file()
-  local state_mtime = get_mtime(state_file)
-
-  -- Check if status file changed
-  if status_mtime > last_status_mtime then
-    last_status_mtime = status_mtime
-    on_status_update()
-  end
-
-  -- Check if state file changed (or if we switched to a different session's file)
-  if state_mtime > last_state_mtime or state_file ~= current_state_file then
-    last_state_mtime = state_mtime
-    current_state_file = state_file
-    on_state_update()
-  end
-end
-
---- Start polling for status and state file changes
+--- Start watching .claude directory for file changes
 function M.start_watcher()
+  local claude_dir = get_claude_dir()
+
   -- Ensure local .claude directory exists
-  vim.fn.mkdir(vim.fn.getcwd() .. '/.claude', 'p')
+  vim.fn.mkdir(claude_dir, 'p')
 
-  -- Stop existing timer if any
-  if poll_timer then
-    poll_timer:stop()
-    poll_timer:close()
+  -- Stop existing watcher if any
+  M.stop_watcher()
+
+  -- Create fs_event watcher on the directory
+  fs_event_handle = vim.loop.new_fs_event()
+  if fs_event_handle then
+    local ok, err = fs_event_handle:start(claude_dir, {}, on_fs_event)
+    if not ok then
+      vim.notify('[claude-code] Failed to start file watcher: ' .. tostring(err), vim.log.levels.WARN)
+      fs_event_handle:close()
+      fs_event_handle = nil
+    end
   end
-
-  -- Create polling timer
-  poll_timer = vim.loop.new_timer()
-  poll_timer:start(0, POLL_INTERVAL_MS, vim.schedule_wrap(poll_files))
 
   -- Initial reads
   M.read_status()
   M.read_state()
 end
 
---- Stop polling
+--- Stop watching for file changes
 function M.stop_watcher()
-  if poll_timer then
-    poll_timer:stop()
-    poll_timer:close()
-    poll_timer = nil
+  if fs_event_handle then
+    fs_event_handle:stop()
+    fs_event_handle:close()
+    fs_event_handle = nil
   end
 
   -- Clean up all timers

@@ -48,17 +48,24 @@ function M.create_session(name, opts)
   -- Start Claude CLI terminal
   local command = opts.command or 'claude'
   local job_id = vim.fn.termopen(command, {
-    on_exit = function(job_id, exit_code, event_type)
-      -- Remove session when Claude exits
-      if M.sessions[name] then
-        M.sessions[name] = nil
-        if M.current_session == name then
-          M.current_session = nil
+    on_exit = function(_, exit_code, _)
+      -- Schedule cleanup to avoid issues in callback context
+      vim.schedule(function()
+        if M.sessions[name] then
+          local session = M.sessions[name]
+          -- Delete buffer if it still exists (clears the named buffer)
+          if session.buf and vim.api.nvim_buf_is_valid(session.buf) then
+            vim.api.nvim_buf_delete(session.buf, { force = true })
+          end
+          M.sessions[name] = nil
+          if M.current_session == name then
+            M.current_session = nil
+          end
+          if M.last_session == name then
+            M.last_session = nil
+          end
         end
-        if M.last_session == name then
-          M.last_session = nil
-        end
-      end
+      end)
     end,
   })
 
@@ -71,8 +78,15 @@ function M.create_session(name, opts)
     return nil
   end
 
+  -- Clean up any stale buffer with this name (from previous session that didn't fully clean up)
+  local buffer_name = 'claude-code://' .. name
+  local existing_buf = vim.fn.bufnr(buffer_name)
+  if existing_buf ~= -1 and existing_buf ~= buf then
+    pcall(vim.api.nvim_buf_delete, existing_buf, { force = true })
+  end
+
   -- Set buffer name and variables for identification
-  vim.api.nvim_buf_set_name(buf, 'claude-code://' .. name)
+  vim.api.nvim_buf_set_name(buf, buffer_name)
   vim.b[buf].claude_code = true
   vim.b[buf].claude_session = name
 

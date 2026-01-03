@@ -37,9 +37,23 @@ install: ## Symlink hooks and statusline-bridge to ~/.claude
 	@ln -s "$(CONFIG_DIR)/statusline-bridge.sh" "$(CLAUDE_DIR)/statusline-bridge.sh"
 	@echo "  Linked: statusline-bridge.sh"
 
+	@# Merge settings.json
+	@echo ""
+	@echo "Merging settings.json..."
+	@if [ ! -f "$(CLAUDE_DIR)/settings.json" ]; then \
+		cp "$(CONFIG_DIR)/settings.json" "$(CLAUDE_DIR)/settings.json"; \
+		echo "  Created: settings.json"; \
+	elif command -v jq >/dev/null 2>&1; then \
+		cp "$(CLAUDE_DIR)/settings.json" "$(CLAUDE_DIR)/settings.json.bak"; \
+		jq -s '.[0] * .[1]' "$(CLAUDE_DIR)/settings.json.bak" "$(CONFIG_DIR)/settings.json" > "$(CLAUDE_DIR)/settings.json"; \
+		echo "  Merged: settings.json (backup: settings.json.bak)"; \
+	else \
+		echo "  Warning: jq not found, cannot merge settings.json"; \
+		echo "  Please manually merge $(CONFIG_DIR)/settings.json"; \
+	fi
+
 	@echo ""
 	@echo "Installation complete!"
-	@echo "Note: You may need to merge config/settings.json into ~/.claude/settings.json"
 
 uninstall: ## Remove symlinks from ~/.claude
 	@echo "Removing claude-code.nvim symlinks..."

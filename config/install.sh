@@ -29,22 +29,19 @@ fi
 # Create directories
 info "Creating directories..."
 mkdir -p "$HOOKS_DIR"
-mkdir -p "$CLAUDE_DIR/state"
 
-# Install hooks
-info "Installing hooks..."
-for hook in "$SCRIPT_DIR/hooks/"*.sh; do
-  name=$(basename "$hook")
-  dest="$HOOKS_DIR/$name"
+# Install unified state hook
+info "Installing state hook..."
+HOOK_SRC="$SCRIPT_DIR/hooks/state-hook.sh"
+HOOK_DEST="$HOOKS_DIR/state-hook.sh"
 
-  if [[ -f "$dest" ]] && [[ "$FORCE" != true ]]; then
-    warn "Hook already exists: $name (use --force to overwrite)"
-  else
-    cp "$hook" "$dest"
-    chmod +x "$dest"
-    info "  Installed: $name"
-  fi
-done
+if [[ -f "$HOOK_DEST" ]] && [[ "$FORCE" != true ]]; then
+  warn "Hook already exists: state-hook.sh (use --force to overwrite)"
+else
+  cp "$HOOK_SRC" "$HOOK_DEST"
+  chmod +x "$HOOK_DEST"
+  info "  Installed: state-hook.sh"
+fi
 
 # Install statusline bridge
 info "Installing statusline bridge..."
@@ -57,11 +54,20 @@ else
   info "  Installed: statusline-bridge.sh"
 fi
 
-# Check for jq (required by statusline-bridge.sh)
+# Check for jq (required by hooks)
 if ! command -v jq &> /dev/null; then
-  warn "jq is not installed. Statusline bridge requires jq."
+  warn "jq is not installed. Hooks require jq for JSON parsing."
   warn "Install with: brew install jq (macOS) or apt install jq (Linux)"
 fi
+
+# Clean up old hooks if they exist
+OLD_HOOKS=("on-prompt.sh" "on-tool-start.sh" "on-permission.sh" "on-stop.sh" "on-file-write.sh")
+for old_hook in "${OLD_HOOKS[@]}"; do
+  if [[ -f "$HOOKS_DIR/$old_hook" ]]; then
+    info "Removing legacy hook: $old_hook"
+    rm -f "$HOOKS_DIR/$old_hook"
+  fi
+done
 
 # Settings.json handling
 SETTINGS_FILE="$CLAUDE_DIR/settings.json"
@@ -82,44 +88,14 @@ if [[ -f "$SETTINGS_FILE" ]]; then
     "padding": 0
   },
   "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "",
-        "hooks": [
-          { "type": "command", "command": "~/.claude/hooks/on-tool-start.sh" }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          { "type": "command", "command": "~/.claude/hooks/on-prompt.sh" }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Write|Edit|MultiEdit",
-        "hooks": [
-          { "type": "command", "command": "~/.claude/hooks/on-file-write.sh" }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          { "type": "command", "command": "~/.claude/hooks/on-stop.sh" }
-        ]
-      }
-    ],
-    "Notification": [
-      {
-        "matcher": "permission_prompt",
-        "hooks": [
-          { "type": "command", "command": "~/.claude/hooks/on-permission.sh" }
-        ]
-      }
-    ]
+    "SessionStart": [{ "hooks": [{ "type": "command", "command": "~/.claude/hooks/state-hook.sh" }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "~/.claude/hooks/state-hook.sh" }] }],
+    "PreToolUse": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/state-hook.sh" }] }],
+    "PermissionRequest": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/state-hook.sh" }] }],
+    "PostToolUse": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/state-hook.sh" }] }],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "~/.claude/hooks/state-hook.sh" }] }],
+    "SubagentStop": [{ "hooks": [{ "type": "command", "command": "~/.claude/hooks/state-hook.sh" }] }],
+    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "~/.claude/hooks/state-hook.sh" }] }]
   }
 }
 EOF
@@ -134,7 +110,15 @@ fi
 info ""
 info "Installation complete!"
 info ""
+info "Hook event → Neovim state mapping:"
+info "  SessionStart      → idle"
+info "  UserPromptSubmit  → processing"
+info "  PreToolUse        → processing"
+info "  PermissionRequest → waiting"
+info "  PostToolUse       → processing (+ buffer refresh on file writes)"
+info "  Stop              → done"
+info "  SessionEnd        → (cleanup)"
+info ""
 info "Next steps:"
 info "  1. Restart Claude Code for hooks to take effect"
 info "  2. Ensure claude-code.nvim is installed in Neovim"
-info "  3. Run :checkhealth claude-code (if available)"
