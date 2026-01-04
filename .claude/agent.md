@@ -8,6 +8,7 @@
 - Automatic buffer synchronization (save before send, refresh after Claude writes)
 - Context injection (files, selections, diagnostics)
 - Code block extraction and replacement
+- Tmux window alerts on state changes
 
 ## Project Structure
 
@@ -21,7 +22,8 @@ claude-code.nvim/
 │   ├── state.lua             # State machine (idle/processing/waiting/done)
 │   ├── statusline.lua        # Real-time status with fs_event watcher
 │   ├── sync.lua              # Buffer save/refresh logic
-│   └── picker.lua            # Telescope session picker
+│   ├── picker.lua            # Telescope session picker
+│   └── tmux.lua              # Tmux window alerts
 ├── plugin/
 │   └── claude-code.lua       # Plugin loader (version check, guard)
 ├── config/

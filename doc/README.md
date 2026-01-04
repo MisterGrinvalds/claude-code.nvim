@@ -5,7 +5,7 @@ Neovim integration for [Claude Code](https://claude.ai/code) CLI with multi-sess
 ## Features
 
 - **Multi-session support** - Run multiple Claude instances with named sessions
-- **Lazygit-style floating window** - 90% screen coverage, toggle with a keymap
+- **Flexible window modes** - Choose between floating window or vertical split
 - **Real-time statusline** - Shows model, tokens, lines changed, and state
 - **Automatic buffer sync** - Saves before sending context, refreshes after Claude writes
 - **Context injection** - Send files, selections, or diagnostics to Claude
@@ -121,6 +121,8 @@ All commands use a unified `:Claude <subcommand>` pattern with tab completion:
 |---------|-------------|
 | `:Claude` | Toggle Claude window (default) |
 | `:Claude toggle` | Toggle Claude window |
+| `:Claude split` | Open Claude in split mode |
+| `:Claude float` | Open Claude in floating window mode |
 | `:Claude new [name]` | Create new session |
 | `:Claude delete [name]` | Delete session |
 | `:Claude picker` | Open session picker |
@@ -205,9 +207,12 @@ Stop ─────────────────────────
 ```lua
 require('claude-code').setup({
   window = {
-    width = 0.9,      -- 90% of screen
-    height = 0.9,
-    border = 'rounded',
+    mode = 'float',       -- 'float' or 'split'
+    width = 0.9,          -- 90% of screen (float mode)
+    height = 0.9,         -- 90% of screen (float mode)
+    border = 'rounded',   -- Border style (float mode)
+    split_side = 'right', -- 'right' or 'left' (split mode)
+    split_width = 0.4,    -- Width fraction (split mode)
   },
   command = 'claude', -- CLI command
   default_session = 'main',

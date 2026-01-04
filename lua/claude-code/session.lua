@@ -143,10 +143,8 @@ function M.setup_keymaps(buf, name)
     require('claude-code').picker()
   end, { buffer = buf, desc = 'Claude session picker' })
 
-  -- Quick toggle with Ctrl-c from terminal mode
-  vim.keymap.set('t', '<C-c>', function()
-    require('claude-code.window').hide_window()
-  end, { buffer = buf, desc = 'Hide Claude window' })
+  -- Ctrl-c to exit terminal mode (go to normal mode)
+  vim.keymap.set('t', '<C-c>', '<C-\\><C-n>', { buffer = buf, desc = 'Exit terminal mode' })
 end
 
 --- Get or create session (auto-create if missing)
