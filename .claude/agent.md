@@ -14,7 +14,8 @@
 ```
 claude-code.nvim/
 ├── lua/claude-code/           # Core Lua modules
-│   ├── init.lua              # Main API, setup(), commands, keymaps
+│   ├── init.lua              # Main API, setup(), module loading
+│   ├── command.lua           # Unified :Claude command dispatcher
 │   ├── session.lua           # Terminal session lifecycle
 │   ├── window.lua            # Floating window management
 │   ├── state.lua             # State machine (idle/processing/waiting/done)
@@ -44,6 +45,29 @@ claude-code.nvim/
 - `send_file()`, `send_selection()`, `send_diagnostics()`, `ask()` - Context injection
 - `extract_code_blocks()`, `replace_with_claude()` - Code extraction
 - `install_hooks(force)` - Install CLI hooks
+
+### command.lua (Unified Command API)
+Provides `:Claude <subcommand>` pattern similar to Telescope:
+- `register(name, fn, desc, complete)` - Register a subcommand
+- `run(cmd, args)` - Dispatch to subcommand
+- `complete(arg_lead, cmd_line, cursor_pos)` - Tab completion
+- `list()` - Get sorted subcommand names
+
+**Available subcommands:**
+| Command | Description |
+|---------|-------------|
+| `:Claude` | Toggle window (default) |
+| `:Claude toggle` | Toggle window |
+| `:Claude new [name]` | Create session |
+| `:Claude delete [name]` | Delete session |
+| `:Claude picker` | Session picker |
+| `:Claude install` | Install hooks |
+| `:Claude file` | Send file |
+| `:Claude selection` | Send selection |
+| `:Claude diagnostics` | Send diagnostics |
+| `:Claude ask` | Custom prompt |
+| `:Claude replace` | Replace with code |
+| `:Claude status` | Show status |
 
 ### session.lua (Terminal Sessions)
 - Manages multiple named Claude CLI instances
@@ -121,11 +145,12 @@ make uninstall
 
 ### Making Changes
 
+- **New command**: Add `M.register()` call in `command.lua` setup()
 - **New API function**: Add to `init.lua`, expose in returned module table
 - **State changes**: Modify `state.lua`, update statusline if needed
 - **Hook behavior**: Edit `config/hooks/state-hook.sh`
 - **Window behavior**: Modify `window.lua`
-- **New keymaps**: Add to `setup_keymaps()` in `init.lua`
+- **New keymaps**: Add to `setup_keymaps()` in `session.lua`
 
 ## Code Conventions
 
@@ -155,7 +180,10 @@ make uninstall
 
 ```
 init.lua
-  └── requires: session, window, state, sync, statusline, picker
+  └── requires: session, window, state, sync, statusline, picker, command
+
+command.lua
+  └── requires: claude-code (lazy, for accessing API functions)
 
 session.lua
   └── requires: (none, standalone)
