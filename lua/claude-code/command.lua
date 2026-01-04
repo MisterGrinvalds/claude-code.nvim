@@ -157,6 +157,24 @@ function M.setup()
       print(vim.inspect(status))
     end
   end, 'Show session status')
+
+  M.register('split', function()
+    -- Close existing window if mode is changing
+    if claude.config.window.mode ~= 'split' and claude.window.is_visible() then
+      claude.window.hide_window()
+    end
+    claude.config.window.mode = 'split'
+    claude.toggle()
+  end, 'Open Claude in split mode')
+
+  M.register('float', function()
+    -- Close existing window if mode is changing
+    if claude.config.window.mode ~= 'float' and claude.window.is_visible() then
+      claude.window.hide_window()
+    end
+    claude.config.window.mode = 'float'
+    claude.toggle()
+  end, 'Open Claude in float mode')
 end
 
 return M
