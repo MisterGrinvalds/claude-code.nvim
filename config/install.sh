@@ -2,7 +2,9 @@
 # Claude Code Neovim Integration - Configuration Installer
 # Installs hooks and statusline bridge for claude-code.nvim
 #
-# Usage: ./install.sh [--force]
+# Usage: ./install.sh [--force] [--merge]
+#   --force  Overwrite existing hook files
+#   --merge  Auto-merge settings.json using jq (creates backup)
 
 set -e
 
@@ -20,11 +22,15 @@ info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-# Check for --force flag
+# Parse flags
 FORCE=false
-if [[ "$1" == "--force" ]]; then
-  FORCE=true
-fi
+MERGE=false
+for arg in "$@"; do
+  case "$arg" in
+    --force) FORCE=true ;;
+    --merge) MERGE=true ;;
+  esac
+done
 
 # Create directories
 info "Creating directories..."
@@ -82,12 +88,23 @@ info ""
 info "Settings configuration..."
 
 if [[ -f "$SETTINGS_FILE" ]]; then
-  warn "Existing settings.json found at $SETTINGS_FILE"
-  info ""
-  info "You need to manually merge the hooks configuration."
-  info "Add the following to your settings.json:"
-  info ""
-  cat << 'EOF'
+  if [[ "$MERGE" == true ]]; then
+    # Auto-merge using jq
+    if ! command -v jq &> /dev/null; then
+      error "jq is required for --merge but not installed"
+      error "Install with: brew install jq (macOS) or apt install jq (Linux)"
+      exit 1
+    fi
+    info "Merging settings.json..."
+    cp "$SETTINGS_FILE" "$SETTINGS_FILE.bak"
+    jq -s '.[0] * .[1]' "$SETTINGS_FILE.bak" "$SCRIPT_DIR/settings.json" > "$SETTINGS_FILE"
+    info "  Merged: settings.json (backup: settings.json.bak)"
+  else
+    warn "Existing settings.json found at $SETTINGS_FILE"
+    info ""
+    info "Run with --merge to automatically merge, or manually add:"
+    info ""
+    cat << 'EOF'
 {
   "statusLine": {
     "type": "command",
@@ -106,8 +123,9 @@ if [[ -f "$SETTINGS_FILE" ]]; then
   }
 }
 EOF
-  info ""
-  info "Reference config available at: $SCRIPT_DIR/settings.json"
+    info ""
+    info "Reference config available at: $SCRIPT_DIR/settings.json"
+  fi
 else
   info "No existing settings.json found. Installing default..."
   cp "$SCRIPT_DIR/settings.json" "$SETTINGS_FILE"
