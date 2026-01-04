@@ -1,0 +1,342 @@
+*claude-code.txt*  Claude Code integration for Neovim
+
+Author:  claude-code.nvim contributors
+License: MIT
+
+==============================================================================
+CONTENTS                                                   *claude-code-contents*
+
+    1. Introduction ............................ |claude-code-introduction|
+    2. Requirements ............................ |claude-code-requirements|
+    3. Installation ............................ |claude-code-installation|
+    4. Commands ................................ |claude-code-commands|
+    5. Lua API ................................. |claude-code-api|
+    6. Configuration ........................... |claude-code-config|
+    7. Statusline .............................. |claude-code-statusline|
+    8. Hooks ................................... |claude-code-hooks|
+    9. Tmux Integration ........................ |claude-code-tmux|
+
+==============================================================================
+1. INTRODUCTION                                        *claude-code-introduction*
+
+claude-code.nvim integrates the Claude Code CLI with Neovim, providing:
+
+- Multi-session terminal management in floating windows
+- Real-time statusline with model, tokens, and state indicators
+- Automatic buffer synchronization (save before send, refresh after writes)
+- Context injection (files, selections, diagnostics)
+- Code block extraction and replacement
+- Tmux window alerts for state changes
+
+==============================================================================
+2. REQUIREMENTS                                        *claude-code-requirements*
+
+- Neovim 0.9+
+- Claude Code CLI (https://claude.ai/code) installed and authenticated
+- telescope.nvim (for session picker)
+- jq (for JSON parsing in hooks)
+- A Nerd Font (for status icons)
+
+Optional:
+- tmux 2.0+ (for window alerts)
+- lualine.nvim (for statusline integration)
+
+==============================================================================
+3. INSTALLATION                                        *claude-code-installation*
+
+Using lazy.nvim: >lua
+    {
+      'your-username/claude-code.nvim',
+      dependencies = { 'nvim-telescope/telescope.nvim' },
+      config = function()
+        require('claude-code').setup()
+      end,
+    }
+<
+
+After installing the plugin, install the Claude Code hooks:
+>vim
+    :Claude install
+<
+Or from terminal:
+>bash
+    ~/.local/share/nvim/lazy/claude-code.nvim/config/install.sh
+<
+Restart Claude Code CLI after installing hooks.
+
+==============================================================================
+4. COMMANDS                                                *claude-code-commands*
+
+All commands use a unified `:Claude <subcommand>` pattern with tab completion.
+
+                                                                       *:Claude*
+:Claude                     Toggle Claude window (default action)
+
+:Claude toggle              Toggle Claude floating window
+
+:Claude new [name]          Create new Claude session
+                            Prompts for name if not provided
+
+:Claude delete [name]       Delete Claude session
+                            Shows picker if name not provided
+
+:Claude picker              Open Telescope session picker
+                            Keymaps: <CR> switch, <C-x> delete,
+                                     <C-n> new, <C-r> rename
+
+:Claude install             Install Claude Code CLI hooks
+:Claude install --force     Force reinstall hooks
+
+:Claude file                Send current file to Claude
+
+:Claude selection           Send visual selection to Claude
+
+:Claude diagnostics         Send buffer diagnostics to Claude
+
+:Claude ask                 Prompt for question to send to Claude
+
+:Claude replace             Replace selection with Claude code block
+                            Shows picker if multiple blocks
+
+:Claude status              Show session status information
+
+==============================================================================
+5. LUA API                                                      *claude-code-api*
+
+Setup ~
+                                                            *claude-code.setup()*
+claude-code.setup({opts})
+    Initialize the plugin with optional configuration.
+    See |claude-code-config| for options.
+
+Session Management ~
+                                                           *claude-code.toggle()*
+claude-code.toggle()
+    Toggle the Claude floating window.
+
+                                                   *claude-code.toggle_session()*
+claude-code.toggle_session({name})
+    Toggle a specific named session.
+
+                                                      *claude-code.new_session()*
+claude-code.new_session({name})
+    Create a new Claude session. Prompts for name if nil.
+
+                                                   *claude-code.delete_session()*
+claude-code.delete_session({name})
+    Delete a session. Shows picker if name is nil.
+
+                                                           *claude-code.picker()*
+claude-code.picker()
+    Open Telescope session picker.
+
+Context Injection ~
+                                                        *claude-code.send_file()*
+claude-code.send_file({session_name})
+    Send current file to Claude. Auto-saves modified buffers first.
+
+                                                   *claude-code.send_selection()*
+claude-code.send_selection({session_name})
+    Send visual selection to Claude.
+
+                                                 *claude-code.send_diagnostics()*
+claude-code.send_diagnostics({session_name})
+    Send buffer diagnostics to Claude.
+
+                                                              *claude-code.ask()*
+claude-code.ask({session_name})
+    Prompt for a question to send to Claude.
+
+                                                             *claude-code.send()*
+claude-code.send({text}, {session_name})
+    Send arbitrary text to Claude session.
+
+Code Extraction ~
+                                                *claude-code.extract_code_blocks()*
+claude-code.extract_code_blocks({session_name})
+    Extract code blocks from Claude's response buffer.
+    Returns array of code strings or nil.
+
+                                                  *claude-code.replace_with_claude()*
+claude-code.replace_with_claude({session_name}, {block_index})
+    Replace current selection/line with code block.
+    Uses last block if index not provided.
+
+                                                   *claude-code.pick_and_replace()*
+claude-code.pick_and_replace({session_name})
+    Show picker to select code block, then replace.
+
+Hooks ~
+                                                    *claude-code.install_hooks()*
+claude-code.install_hooks({force})
+    Install Claude Code CLI hooks.
+    Pass true to force overwrite existing files.
+
+Buffer Sync ~
+                                               *claude-code.sync.force_refresh()*
+claude-code.sync.force_refresh({silent})
+    Force refresh all buffers with :checktime.
+
+                                          *claude-code.sync.save_modified_buffers()*
+claude-code.sync.save_modified_buffers()
+    Save all modified buffers before sending to Claude.
+
+==============================================================================
+6. CONFIGURATION                                            *claude-code-config*
+
+Default configuration: >lua
+    require('claude-code').setup({
+      window = {
+        width = 0.9,        -- 90% of screen width
+        height = 0.9,       -- 90% of screen height
+        border = 'rounded', -- Border style
+      },
+      command = 'claude',   -- CLI command to run
+      default_session = 'main',
+      statusline = {
+        show_model = true,  -- Show model name (Opus, Sonnet)
+        show_tokens = true, -- Show token count
+        show_cost = false,  -- Show cost (off by default)
+        show_lines = true,  -- Show +added/-removed lines
+      },
+    })
+<
+
+==============================================================================
+7. STATUSLINE                                            *claude-code-statusline*
+
+The plugin provides real-time status via file system watching.
+
+States ~
+                                                      *claude-code-statusline-states*
+    idle        󰚩  Gray    (#6c7086)  Ready, waiting for input
+    processing  󰦖  Yellow  (#f9e2af)  Claude is working
+    waiting     󰋗  Peach   (#fab387)  Needs user permission
+    done        󰄬  Green   (#a6e3a1)  Task complete (2s display)
+
+Lualine Integration ~
+                                                      *claude-code-statusline-lualine*
+>lua
+    {
+      'nvim-lualine/lualine.nvim',
+      opts = {
+        sections = {
+          lualine_x = {
+            {
+              function()
+                return require('claude-code.statusline').get_status()
+              end,
+              color = function()
+                return { fg = require('claude-code.statusline').get_color() }
+              end,
+              cond = function()
+                local ok, sl = pcall(require, 'claude-code.statusline')
+                return ok and sl.get_cached_status() ~= nil
+              end,
+            },
+          },
+        },
+      },
+    }
+<
+
+Statusline API ~
+                                                 *claude-code.statusline.get_status()*
+get_status()
+    Returns formatted status string (model, tokens, lines).
+
+                                                  *claude-code.statusline.get_state()*
+get_state()
+    Returns current state: 'idle', 'processing', 'waiting', or 'done'.
+
+                                                   *claude-code.statusline.get_icon()*
+get_icon()
+    Returns Nerd Font icon for current state.
+
+                                                  *claude-code.statusline.get_color()*
+get_color()
+    Returns hex color for current state.
+
+==============================================================================
+8. HOOKS                                                      *claude-code-hooks*
+
+The plugin communicates with Claude Code CLI via hooks that write state files.
+
+Hook Events ~
+                                                          *claude-code-hook-events*
+    SessionStart        Creates state file, sets idle
+    UserPromptSubmit    Sets processing state
+    PreToolUse          Sets processing state
+    PermissionRequest   Sets waiting state
+    PostToolUse         Sets processing, triggers buffer refresh on writes
+    Stop                Sets done state
+    SessionEnd          Cleans up state files
+
+State Files ~
+                                                          *claude-code-state-files*
+State files are written to `.claude/` in the project directory:
+
+    state-{SESSION_ID}.json    Current state (idle/processing/waiting/done)
+    status.json                Model, tokens, cost, lines changed
+    refresh-{SESSION_ID}       Timestamp signal for buffer refresh
+
+Installing Hooks ~
+
+From Neovim: >vim
+    :Claude install
+<
+From terminal: >bash
+    ~/.local/share/nvim/lazy/claude-code.nvim/config/install.sh
+<
+For development (symlinks): >bash
+    make install
+<
+
+==============================================================================
+9. TMUX INTEGRATION                                            *claude-code-tmux*
+
+When running in tmux, the plugin highlights the window tab on state changes.
+
+Alerts ~
+                                                           *claude-code-tmux-alerts*
+    done state      Teal highlight (#94e2d5)    Task complete
+    waiting state   Yellow highlight (#f9e2af)  Needs attention
+
+Alerts auto-clear when you switch to the window (requires tmux hook config).
+
+Tmux Configuration ~
+                                                           *claude-code-tmux-config*
+Add to ~/.config/tmux/tmux.conf: >tmux
+    set -g status-interval 1
+    set-hook -g after-select-window 'run-shell "~/.config/tmux/scripts/clear-alert.sh #{window_id}"'
+<
+
+Create ~/.config/tmux/scripts/clear-alert.sh: >bash
+    #!/bin/bash
+    WINDOW_ID="$1"
+    ALERT_FLAG=$(tmux show-window-options -t "$WINDOW_ID" -v @alert 2>/dev/null)
+    if [ "$ALERT_FLAG" = "1" ]; then
+        tmux set-window-option -t "$WINDOW_ID" @alert 0
+        tmux set-window-option -t "$WINDOW_ID" window-status-style "fg=#bac2de,bg=#45475a"
+    fi
+<
+
+Tmux API ~
+                                                              *claude-code.tmux.alert()*
+claude-code.tmux.alert({color})
+    Set tmux window alert with hex color.
+
+                                                         *claude-code.tmux.alert_low()*
+claude-code.tmux.alert_low()
+    Teal alert (task complete).
+
+                                                      *claude-code.tmux.alert_medium()*
+claude-code.tmux.alert_medium()
+    Yellow alert (needs attention).
+
+                                                        *claude-code.tmux.alert_high()*
+claude-code.tmux.alert_high()
+    Red alert (error).
+
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:
