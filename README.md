@@ -47,7 +47,7 @@ The plugin includes hooks that integrate with Claude Code CLI for real-time stat
 
 **Install from Neovim:**
 ```vim
-:ClaudeInstallHooks
+:Claude install
 ```
 
 **Or from terminal:**
@@ -115,14 +115,23 @@ end, { desc = 'Refresh buffers' })
 
 ## Commands
 
+All commands use a unified `:Claude <subcommand>` pattern with tab completion:
+
 | Command | Description |
 |---------|-------------|
-| `:ClaudeToggle` | Toggle Claude window |
-| `:ClaudeNew [name]` | Create new session |
-| `:ClaudeDelete [name]` | Delete session |
-| `:ClaudePicker` | Open session picker |
-| `:ClaudeInstallHooks` | Install Claude CLI hooks |
-| `:ClaudeInstallHooks!` | Force reinstall hooks |
+| `:Claude` | Toggle Claude window (default) |
+| `:Claude toggle` | Toggle Claude window |
+| `:Claude new [name]` | Create new session |
+| `:Claude delete [name]` | Delete session |
+| `:Claude picker` | Open session picker |
+| `:Claude install` | Install Claude CLI hooks |
+| `:Claude install --force` | Force reinstall hooks |
+| `:Claude file` | Send current file to Claude |
+| `:Claude selection` | Send selection to Claude |
+| `:Claude diagnostics` | Send diagnostics to Claude |
+| `:Claude ask` | Ask Claude a question |
+| `:Claude replace` | Replace with Claude code block |
+| `:Claude status` | Show session status |
 
 ## Statusline Integration
 
