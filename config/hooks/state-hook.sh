@@ -12,6 +12,8 @@
 #   Stop                   → done
 #   SubagentStop           → (no change - main agent still active)
 #   SessionEnd             → (cleanup state file)
+#
+# Note: tmux alerts are handled by the Neovim plugin (lua/claude-code/tmux.lua)
 
 set -euo pipefail
 

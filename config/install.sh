@@ -35,9 +35,12 @@ info "Installing state hook..."
 HOOK_SRC="$SCRIPT_DIR/hooks/state-hook.sh"
 HOOK_DEST="$HOOKS_DIR/state-hook.sh"
 
-if [[ -f "$HOOK_DEST" ]] && [[ "$FORCE" != true ]]; then
+if [[ -L "$HOOK_DEST" ]] && [[ "$(readlink "$HOOK_DEST")" == "$HOOK_SRC" ]]; then
+  info "  Already symlinked: state-hook.sh (development mode)"
+elif [[ -f "$HOOK_DEST" ]] && [[ "$FORCE" != true ]]; then
   warn "Hook already exists: state-hook.sh (use --force to overwrite)"
 else
+  rm -f "$HOOK_DEST"
   cp "$HOOK_SRC" "$HOOK_DEST"
   chmod +x "$HOOK_DEST"
   info "  Installed: state-hook.sh"
@@ -45,11 +48,15 @@ fi
 
 # Install statusline bridge
 info "Installing statusline bridge..."
+BRIDGE_SRC="$SCRIPT_DIR/statusline-bridge.sh"
 BRIDGE_DEST="$CLAUDE_DIR/statusline-bridge.sh"
-if [[ -f "$BRIDGE_DEST" ]] && [[ "$FORCE" != true ]]; then
+if [[ -L "$BRIDGE_DEST" ]] && [[ "$(readlink "$BRIDGE_DEST")" == "$BRIDGE_SRC" ]]; then
+  info "  Already symlinked: statusline-bridge.sh (development mode)"
+elif [[ -f "$BRIDGE_DEST" ]] && [[ "$FORCE" != true ]]; then
   warn "Statusline bridge already exists (use --force to overwrite)"
 else
-  cp "$SCRIPT_DIR/statusline-bridge.sh" "$BRIDGE_DEST"
+  rm -f "$BRIDGE_DEST"
+  cp "$BRIDGE_SRC" "$BRIDGE_DEST"
   chmod +x "$BRIDGE_DEST"
   info "  Installed: statusline-bridge.sh"
 fi
@@ -118,6 +125,9 @@ info "  PermissionRequest → waiting"
 info "  PostToolUse       → processing (+ buffer refresh on file writes)"
 info "  Stop              → done"
 info "  SessionEnd        → (cleanup)"
+info ""
+info "Tmux alerts: Plugin highlights window tab when Claude needs attention or completes."
+info "             Requires tmux with alert hooks configured (see docs/tmux-alerts.md)."
 info ""
 info "Next steps:"
 info "  1. Restart Claude Code for hooks to take effect"

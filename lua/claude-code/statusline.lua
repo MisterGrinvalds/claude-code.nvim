@@ -243,8 +243,16 @@ end
 
 --- Callback when state file changes
 local function on_state_update()
+  local prev_state = cached_state and cached_state.state
   M.read_state()
   refresh_lualine()
+
+  -- Trigger tmux alert on state change (done/waiting)
+  local new_state = cached_state and cached_state.state
+  if new_state and new_state ~= prev_state then
+    local tmux = require('claude-code.tmux')
+    tmux.on_state_change(new_state)
+  end
 
   -- Handle "done" state: clear after 2 seconds
   if cached_state and cached_state.state == 'done' then
