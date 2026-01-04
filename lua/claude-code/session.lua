@@ -38,6 +38,7 @@ function M.create_session(name, opts)
   vim.bo[buf].buflisted = false
   vim.bo[buf].swapfile = false
   vim.bo[buf].filetype = 'claudecode'
+  vim.bo[buf].modified = false  -- Ensure buffer is unmodified for termopen
 
   -- Save current buffer to restore later
   local current_buf = vim.api.nvim_get_current_buf()
