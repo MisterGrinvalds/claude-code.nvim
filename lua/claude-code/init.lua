@@ -10,6 +10,7 @@ M.state = require('claude-code.state')
 M.picker_module = require('claude-code.picker')
 M.statusline = require('claude-code.statusline')
 M.sync = require('claude-code.sync')
+M.command = require('claude-code.command')
 
 -- Default configuration
 M.config = {
@@ -48,26 +49,22 @@ function M.setup(opts)
   -- Initialize sync module (watches refresh file for buffer reload)
   M.sync.setup()
 
-  -- Register user commands
-  vim.api.nvim_create_user_command('ClaudeInstallHooks', function(opts)
-    M.install_hooks(opts.bang)
-  end, { bang = true, desc = 'Install Claude Code hooks (! to force)' })
+  -- Initialize command module
+  M.command.setup()
 
-  vim.api.nvim_create_user_command('ClaudeToggle', function()
-    M.toggle()
-  end, { desc = 'Toggle Claude Code window' })
-
-  vim.api.nvim_create_user_command('ClaudeNew', function(opts)
-    M.new_session(opts.args ~= '' and opts.args or nil)
-  end, { nargs = '?', desc = 'Create new Claude session' })
-
-  vim.api.nvim_create_user_command('ClaudeDelete', function(opts)
-    M.delete_session(opts.args ~= '' and opts.args or nil)
-  end, { nargs = '?', desc = 'Delete Claude session' })
-
-  vim.api.nvim_create_user_command('ClaudePicker', function()
-    M.picker()
-  end, { desc = 'Open Claude session picker' })
+  -- Register unified :Claude command
+  vim.api.nvim_create_user_command('Claude', function(opts)
+    local args = opts.fargs
+    local cmd = args[1]
+    local rest = vim.list_slice(args, 2)
+    M.command.run(cmd, rest)
+  end, {
+    nargs = '*',
+    complete = function(arg_lead, cmd_line, cursor_pos)
+      return M.command.complete(arg_lead, cmd_line, cursor_pos)
+    end,
+    desc = 'Claude Code commands',
+  })
 end
 
 --- Toggle Claude window (main/last session)
