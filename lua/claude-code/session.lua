@@ -125,8 +125,8 @@ function M.setup_keymaps(buf, name)
     require('claude-code.window').hide_window()
   end, { buffer = buf, desc = 'Hide Claude window' })
 
-  -- Alternative: Ctrl-c to close (also standard)
-  vim.keymap.set('n', '<C-c>', function()
+  -- Esc-Esc to close (quick escape after exiting terminal mode)
+  vim.keymap.set('n', '<Esc><Esc>', function()
     require('claude-code.window').hide_window()
   end, { buffer = buf, desc = 'Hide Claude window' })
 
