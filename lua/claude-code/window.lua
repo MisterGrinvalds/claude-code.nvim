@@ -31,24 +31,85 @@ function M.create_float_window(buf, title)
   return vim.api.nvim_open_win(buf, true, opts)
 end
 
+--- Create vertical split window
+---@param buf number Buffer to show
+---@param title string Window title (shown in winbar)
+---@return number Window ID
+function M.create_split_window(buf, title)
+  local config = require('claude-code').config.window
+  local width = math.floor(vim.o.columns * (config.split_width or 0.4))
+
+  -- Create the split based on configured side
+  if config.split_side == 'left' then
+    vim.cmd('topleft vsplit')
+  else
+    vim.cmd('botright vsplit')
+  end
+
+  -- Get the new window
+  local win = vim.api.nvim_get_current_win()
+
+  -- Set the buffer
+  vim.api.nvim_win_set_buf(win, buf)
+
+  -- Set width
+  vim.api.nvim_win_set_width(win, width)
+
+  -- Set window-local options
+  vim.wo[win].winfixwidth = true
+  vim.wo[win].number = false
+  vim.wo[win].relativenumber = false
+  vim.wo[win].signcolumn = 'no'
+
+  -- Set winbar for title
+  M.update_winbar(win, title)
+
+  return win
+end
+
+--- Update window bar title (for split windows)
+---@param win number Window ID
+---@param title string Title text
+function M.update_winbar(win, title)
+  if not vim.api.nvim_win_is_valid(win) then
+    return
+  end
+
+  -- Only set winbar for non-floating windows
+  local win_config = vim.api.nvim_win_get_config(win)
+  if win_config.relative == '' then
+    vim.wo[win].winbar = '%#Title#' .. title .. '%*'
+  end
+end
+
 --- Get or create the shared Claude window
 ---@param buf number Buffer to display
 ---@param title string Window title
 ---@return number Window ID
 function M.get_or_create_window(buf, title)
+  local config = require('claude-code').config.window
+  local mode = config.mode or 'float'
+
   -- Check if window exists and is valid
   if M.claude_window and vim.api.nvim_win_is_valid(M.claude_window) then
     -- Reuse existing window, just switch buffer
     vim.api.nvim_win_set_buf(M.claude_window, buf)
-    -- Update title
-    vim.api.nvim_win_set_config(M.claude_window, {
-      title = title,
-    })
+    -- Update title based on mode
+    if mode == 'split' then
+      M.update_winbar(M.claude_window, title)
+    else
+      vim.api.nvim_win_set_config(M.claude_window, { title = title })
+    end
     return M.claude_window
   end
 
-  -- Create new floating window
-  local win = M.create_float_window(buf, title)
+  -- Create new window based on mode
+  local win
+  if mode == 'split' then
+    win = M.create_split_window(buf, title)
+  else
+    win = M.create_float_window(buf, title)
+  end
   M.claude_window = win
 
   -- Set up autocommand to clear reference when window closes
@@ -164,9 +225,14 @@ function M.update_title(name, state)
   -- Only update if this session is currently visible
   if session and session.is_visible and M.claude_window then
     local title = string.format(' Claude Code: %s [%s] ', name, state)
-    vim.api.nvim_win_set_config(M.claude_window, {
-      title = title,
-    })
+    local config = require('claude-code').config.window
+    local mode = config.mode or 'float'
+
+    if mode == 'split' then
+      M.update_winbar(M.claude_window, title)
+    else
+      vim.api.nvim_win_set_config(M.claude_window, { title = title })
+    end
   end
 end
 

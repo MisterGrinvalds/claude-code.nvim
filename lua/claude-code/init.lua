@@ -15,7 +15,10 @@ M.command = require('claude-code.command')
 -- Default configuration
 M.config = {
   window = {
-    width = 0.9, -- 90% of screen (lazygit-style)
+    mode = 'float',       -- 'float' or 'split'
+    split_side = 'right', -- 'right' or 'left' (for split mode)
+    split_width = 0.4,    -- Width fraction for split mode (0.0-1.0)
+    width = 0.9,          -- 90% of screen (lazygit-style, for float mode)
     height = 0.9,
     border = 'rounded',
   },
