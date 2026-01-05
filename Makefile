@@ -55,7 +55,7 @@ install: ## Symlink hooks and statusline-bridge to ~/.claude
 	@# Configure tmux hooks
 	@echo ""
 	@echo "Configuring tmux alert hooks..."
-	@CLEAR_CMD='if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option -u window-status-format ; set-window-option -u window-status-current-format"'; \
+	@CLEAR_CMD='if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option window-status-format \"#{@original_format}\" ; set-window-option window-status-current-format \"#{@original_current_format}\""'; \
 	if [ -n "$$TMUX" ]; then \
 		if tmux show-hooks -g 2>/dev/null | grep -q "after-select-window.*@alert"; then \
 			echo "  Tmux hooks already configured (runtime)"; \
@@ -71,14 +71,14 @@ install: ## Symlink hooks and statusline-bridge to ~/.claude
 		else \
 			echo '' >> "$(HOME)/.tmux.conf"; \
 			echo '# claude-code.nvim alert hooks - clears window alert on focus (keyboard + mouse)' >> "$(HOME)/.tmux.conf"; \
-			echo 'set-hook -g after-select-window '"'"'if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option -u window-status-format ; set-window-option -u window-status-current-format"'"'" >> "$(HOME)/.tmux.conf"; \
-			echo 'set-hook -g session-window-changed '"'"'if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option -u window-status-format ; set-window-option -u window-status-current-format"'"'" >> "$(HOME)/.tmux.conf"; \
+			echo 'set-hook -g after-select-window '"'"'if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option window-status-format \"#{@original_format}\" ; set-window-option window-status-current-format \"#{@original_current_format}\""'"'" >> "$(HOME)/.tmux.conf"; \
+			echo 'set-hook -g session-window-changed '"'"'if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option window-status-format \"#{@original_format}\" ; set-window-option window-status-current-format \"#{@original_current_format}\""'"'" >> "$(HOME)/.tmux.conf"; \
 			echo "  Installed: ~/.tmux.conf hooks"; \
 		fi; \
 	else \
 		echo '# claude-code.nvim alert hooks - clears window alert on focus (keyboard + mouse)' > "$(HOME)/.tmux.conf"; \
-		echo 'set-hook -g after-select-window '"'"'if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option -u window-status-format ; set-window-option -u window-status-current-format"'"'" >> "$(HOME)/.tmux.conf"; \
-		echo 'set-hook -g session-window-changed '"'"'if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option -u window-status-format ; set-window-option -u window-status-current-format"'"'" >> "$(HOME)/.tmux.conf"; \
+		echo 'set-hook -g after-select-window '"'"'if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option window-status-format \"#{@original_format}\" ; set-window-option window-status-current-format \"#{@original_current_format}\""'"'" >> "$(HOME)/.tmux.conf"; \
+		echo 'set-hook -g session-window-changed '"'"'if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option window-status-format \"#{@original_format}\" ; set-window-option window-status-current-format \"#{@original_current_format}\""'"'" >> "$(HOME)/.tmux.conf"; \
 		echo "  Created: ~/.tmux.conf"; \
 	fi
 

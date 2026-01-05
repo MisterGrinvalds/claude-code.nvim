@@ -139,13 +139,13 @@ function M.clear()
   -- Clear alert flag
   vim.fn.system(string.format("tmux set-window-option -t %s @alert 0 2>/dev/null", window_id))
 
-  -- Unset window-specific formats to fall back to global/session settings
-  vim.fn.system(string.format("tmux set-window-option -t %s -u window-status-format 2>/dev/null", window_id))
-  vim.fn.system(string.format("tmux set-window-option -t %s -u window-status-current-format 2>/dev/null", window_id))
-
-  -- Clean up stored original formats
-  vim.fn.system(string.format("tmux set-window-option -t %s -u @original_format 2>/dev/null", window_id))
-  vim.fn.system(string.format("tmux set-window-option -t %s -u @original_current_format 2>/dev/null", window_id))
+  -- Restore original formats (preserves user's custom theme)
+  if M._original_format then
+    vim.fn.system(string.format("tmux set-window-option -t %s window-status-format '%s' 2>/dev/null", window_id, M._original_format))
+  end
+  if M._original_current_format then
+    vim.fn.system(string.format("tmux set-window-option -t %s window-status-current-format '%s' 2>/dev/null", window_id, M._original_current_format))
+  end
 end
 
 --- Alert: task complete (teal)

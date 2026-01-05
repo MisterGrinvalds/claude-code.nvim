@@ -155,7 +155,7 @@ TMUX_HOOK_MARKER="# claude-code.nvim alert hook"
 info ""
 info "Tmux configuration..."
 
-TMUX_CLEAR_CMD='if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option -u window-status-format ; set-window-option -u window-status-current-format"'
+TMUX_CLEAR_CMD='if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option window-status-format \"#{@original_format}\" ; set-window-option window-status-current-format \"#{@original_current_format}\""'
 
 if [[ -n "$TMUX" ]]; then
   # We're inside tmux - can configure directly
@@ -178,8 +178,9 @@ if [[ -f "$TMUX_CONF" ]]; then
     cat >> "$TMUX_CONF" << 'EOF'
 
 # claude-code.nvim alert hooks - clears window alert on focus (keyboard + mouse)
-set-hook -g after-select-window 'if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option -u window-status-format ; set-window-option -u window-status-current-format"'
-set-hook -g session-window-changed 'if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option -u window-status-format ; set-window-option -u window-status-current-format"'
+# Restores original format from @original_format/@original_current_format saved by the plugin
+set-hook -g after-select-window 'if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option window-status-format \"#{@original_format}\" ; set-window-option window-status-current-format \"#{@original_current_format}\""'
+set-hook -g session-window-changed 'if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option window-status-format \"#{@original_format}\" ; set-window-option window-status-current-format \"#{@original_current_format}\""'
 EOF
     info "  Installed: ~/.tmux.conf hooks"
     if [[ -z "$TMUX" ]]; then
@@ -190,8 +191,9 @@ else
   info "  Creating ~/.tmux.conf with alert hooks..."
   cat > "$TMUX_CONF" << 'EOF'
 # claude-code.nvim alert hooks - clears window alert on focus (keyboard + mouse)
-set-hook -g after-select-window 'if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option -u window-status-format ; set-window-option -u window-status-current-format"'
-set-hook -g session-window-changed 'if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option -u window-status-format ; set-window-option -u window-status-current-format"'
+# Restores original format from @original_format/@original_current_format saved by the plugin
+set-hook -g after-select-window 'if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option window-status-format \"#{@original_format}\" ; set-window-option window-status-current-format \"#{@original_current_format}\""'
+set-hook -g session-window-changed 'if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option window-status-format \"#{@original_format}\" ; set-window-option window-status-current-format \"#{@original_current_format}\""'
 EOF
   info "  Created: ~/.tmux.conf"
 fi
