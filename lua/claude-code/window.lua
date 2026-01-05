@@ -168,7 +168,21 @@ function M.hide_window()
   local current_name = session_module.current_session
 
   if M.claude_window and vim.api.nvim_win_is_valid(M.claude_window) then
-    vim.api.nvim_win_close(M.claude_window, true)
+    -- Check if this is the last window (can't close the last window)
+    local windows = vim.api.nvim_list_wins()
+    local non_float_windows = vim.tbl_filter(function(w)
+      local config = vim.api.nvim_win_get_config(w)
+      return config.relative == ''
+    end, windows)
+
+    if #non_float_windows <= 1 then
+      -- This is the last window, switch to empty buffer instead of closing
+      local empty_buf = vim.api.nvim_create_buf(true, true)
+      vim.api.nvim_win_set_buf(M.claude_window, empty_buf)
+      vim.cmd('stopinsert')
+    else
+      vim.api.nvim_win_close(M.claude_window, true)
+    end
   end
   M.claude_window = nil
 
