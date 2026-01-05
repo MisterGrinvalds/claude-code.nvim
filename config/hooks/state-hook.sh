@@ -94,7 +94,9 @@ case "$HOOK_EVENT" in
     ;;
 
   SessionEnd)
-    # Clean up state file when session ends
+    # Write idle state to clear tmux alert, then clean up
+    write_state "idle"
+    sleep 0.1  # Brief delay to ensure Neovim picks up the state change
     rm -f "$STATE_FILE" "$REFRESH_FILE" 2>/dev/null || true
     ;;
 

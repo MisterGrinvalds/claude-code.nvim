@@ -175,6 +175,80 @@ function M.setup()
     claude.config.window.mode = 'float'
     claude.toggle()
   end, 'Open Claude in float mode')
+
+  -- Tmux alert testing commands
+  local tmux_targets = { 'processing', 'waiting', 'done', 'low', 'medium', 'high', 'clear', 'debug', 'reset' }
+
+  M.register('tmux', function(args)
+    local tmux = require('claude-code.tmux')
+    local target = args[1]
+
+    if not tmux.is_tmux() then
+      vim.notify('Not running inside tmux', vim.log.levels.WARN)
+      return
+    end
+
+    if not target then
+      vim.notify('Usage: :Claude tmux <' .. table.concat(tmux_targets, '|') .. '>', vim.log.levels.INFO)
+      return
+    end
+
+    if target == 'clear' then
+      tmux.clear()
+      vim.notify('Cleared tmux alert', vim.log.levels.INFO)
+    elseif target == 'processing' then
+      tmux.alert_processing()
+      vim.notify('Set tmux alert: processing (yellow)', vim.log.levels.INFO)
+    elseif target == 'waiting' or target == 'medium' then
+      tmux.alert_medium()
+      vim.notify('Set tmux alert: waiting (orange)', vim.log.levels.INFO)
+    elseif target == 'done' or target == 'low' then
+      tmux.alert_low()
+      vim.notify('Set tmux alert: done (green)', vim.log.levels.INFO)
+    elseif target == 'high' then
+      tmux.alert_high()
+      vim.notify('Set tmux alert: error (red)', vim.log.levels.INFO)
+    elseif target == 'reset' then
+      tmux._original_format = nil
+      tmux._original_current_format = nil
+      tmux._current_window_id = nil
+      tmux.clear()
+      vim.notify('Reset tmux format cache', vim.log.levels.INFO)
+    elseif target == 'debug' then
+      local window_id = tmux.get_window_id()
+      local info = {
+        'Tmux Debug Info:',
+        '  Window ID: ' .. (window_id or 'nil'),
+        '  Cached format: ' .. (tmux._original_format or 'nil'),
+        '  Cached window: ' .. (tmux._current_window_id or 'nil'),
+      }
+      -- Get current tmux values
+      if window_id then
+        local handle = io.popen("tmux show-options -gv window-status-format 2>/dev/null")
+        if handle then
+          local global_fmt = handle:read('*a'):gsub('%s+$', '')
+          handle:close()
+          table.insert(info, '  Global format: ' .. global_fmt)
+        end
+        handle = io.popen(string.format("tmux show-window-options -t %s -v window-status-format 2>/dev/null", window_id))
+        if handle then
+          local window_fmt = handle:read('*a'):gsub('%s+$', '')
+          handle:close()
+          table.insert(info, '  Window format: ' .. (window_fmt ~= '' and window_fmt or '(not set)'))
+        end
+      end
+      vim.notify(table.concat(info, '\n'), vim.log.levels.INFO)
+    else
+      vim.notify('Unknown target: ' .. target .. '. Use: ' .. table.concat(tmux_targets, ', '), vim.log.levels.ERROR)
+    end
+  end, 'Test tmux window alerts', function(arg_lead)
+    if arg_lead == '' then
+      return tmux_targets
+    end
+    return vim.tbl_filter(function(t)
+      return vim.startswith(t, arg_lead)
+    end, tmux_targets)
+  end)
 end
 
 return M
