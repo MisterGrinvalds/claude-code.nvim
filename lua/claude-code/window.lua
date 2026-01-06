@@ -225,6 +225,27 @@ function M.is_visible()
   return M.claude_window ~= nil and vim.api.nvim_win_is_valid(M.claude_window)
 end
 
+--- Focus Claude window (show if hidden, focus if visible)
+---@param name string|nil Session name (nil = current/last/main)
+function M.focus(name)
+  local session_module = require('claude-code.session')
+
+  -- If window is visible, just focus it (don't hide like toggle)
+  if M.claude_window and vim.api.nvim_win_is_valid(M.claude_window) then
+    vim.api.nvim_set_current_win(M.claude_window)
+    vim.cmd('startinsert')
+    return
+  end
+
+  -- Window not visible, show it (same as toggle when hidden)
+  local session_name = name or session_module.current_session or session_module.last_session or 'main'
+  local session = session_module.get_or_create(session_name)
+
+  if session then
+    M.show_session(session_name)
+  end
+end
+
 --- Update window title (shows session name and state)
 ---@param name string Session name
 ---@param state string Session state

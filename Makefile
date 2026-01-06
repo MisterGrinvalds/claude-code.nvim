@@ -52,38 +52,11 @@ install: ## Symlink hooks and statusline-bridge to ~/.claude
 		echo "  Please manually merge $(CONFIG_DIR)/settings.json"; \
 	fi
 
-	@# Configure tmux hooks
-	@echo ""
-	@echo "Configuring tmux alert hooks..."
-	@CLEAR_CMD='if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option window-status-format \"#{@original_format}\" ; set-window-option window-status-current-format \"#{@original_current_format}\""'; \
-	if [ -n "$$TMUX" ]; then \
-		if tmux show-hooks -g 2>/dev/null | grep -q "after-select-window.*@alert"; then \
-			echo "  Tmux hooks already configured (runtime)"; \
-		else \
-			tmux set-hook -g after-select-window "$$CLEAR_CMD"; \
-			tmux set-hook -g session-window-changed "$$CLEAR_CMD"; \
-			echo "  Installed: after-select-window, session-window-changed hooks"; \
-		fi; \
-	fi
-	@if [ -f "$(HOME)/.tmux.conf" ]; then \
-		if grep -q "claude-code.nvim alert hook" "$(HOME)/.tmux.conf"; then \
-			echo "  Tmux hooks already in ~/.tmux.conf"; \
-		else \
-			echo '' >> "$(HOME)/.tmux.conf"; \
-			echo '# claude-code.nvim alert hooks - clears window alert on focus (keyboard + mouse)' >> "$(HOME)/.tmux.conf"; \
-			echo 'set-hook -g after-select-window '"'"'if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option window-status-format \"#{@original_format}\" ; set-window-option window-status-current-format \"#{@original_current_format}\""'"'" >> "$(HOME)/.tmux.conf"; \
-			echo 'set-hook -g session-window-changed '"'"'if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option window-status-format \"#{@original_format}\" ; set-window-option window-status-current-format \"#{@original_current_format}\""'"'" >> "$(HOME)/.tmux.conf"; \
-			echo "  Installed: ~/.tmux.conf hooks"; \
-		fi; \
-	else \
-		echo '# claude-code.nvim alert hooks - clears window alert on focus (keyboard + mouse)' > "$(HOME)/.tmux.conf"; \
-		echo 'set-hook -g after-select-window '"'"'if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option window-status-format \"#{@original_format}\" ; set-window-option window-status-current-format \"#{@original_current_format}\""'"'" >> "$(HOME)/.tmux.conf"; \
-		echo 'set-hook -g session-window-changed '"'"'if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option window-status-format \"#{@original_format}\" ; set-window-option window-status-current-format \"#{@original_current_format}\""'"'" >> "$(HOME)/.tmux.conf"; \
-		echo "  Created: ~/.tmux.conf"; \
-	fi
-
 	@echo ""
 	@echo "Installation complete!"
+	@echo ""
+	@echo "Tmux alerts: Window tab changes color when Claude needs attention."
+	@echo "             Alert clears automatically when Neovim gets focus (FocusGained)."
 
 uninstall: ## Remove symlinks from ~/.claude
 	@echo "Removing claude-code.nvim symlinks..."
@@ -122,27 +95,6 @@ status: ## Show current symlink status
 		echo "  ✗ statusline-bridge.sh (regular file, not symlink)"; \
 	else \
 		echo "  - statusline-bridge.sh (not installed)"; \
-	fi
-	@echo ""
-	@echo "Tmux alert hooks:"
-	@if [ -n "$$TMUX" ]; then \
-		if tmux show-hooks -g 2>/dev/null | grep -q "after-select-window.*@alert"; then \
-			echo "  ✓ after-select-window (runtime)"; \
-		else \
-			echo "  - after-select-window (not installed)"; \
-		fi; \
-		if tmux show-hooks -g 2>/dev/null | grep -q "session-window-changed.*@alert"; then \
-			echo "  ✓ session-window-changed (runtime)"; \
-		else \
-			echo "  - session-window-changed (not installed)"; \
-		fi; \
-	else \
-		echo "  - Not in tmux session"; \
-	fi
-	@if [ -f "$(HOME)/.tmux.conf" ] && grep -q "claude-code.nvim alert hook" "$(HOME)/.tmux.conf"; then \
-		echo "  ✓ ~/.tmux.conf hooks installed"; \
-	else \
-		echo "  - ~/.tmux.conf hooks not installed"; \
 	fi
 
 help: ## Show this help

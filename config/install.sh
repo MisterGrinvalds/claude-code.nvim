@@ -73,22 +73,6 @@ if ! command -v jq &> /dev/null; then
   warn "Install with: brew install jq (macOS) or apt install jq (Linux)"
 fi
 
-# Install tmux clear-alert hook
-info "Installing tmux clear-alert hook..."
-CLEAR_ALERT_SRC="$SCRIPT_DIR/hooks/clear-alert.sh"
-CLEAR_ALERT_DEST="$HOOKS_DIR/clear-alert.sh"
-
-if [[ -L "$CLEAR_ALERT_DEST" ]] && [[ "$(readlink "$CLEAR_ALERT_DEST")" == "$CLEAR_ALERT_SRC" ]]; then
-  info "  Already symlinked: clear-alert.sh (development mode)"
-elif [[ -f "$CLEAR_ALERT_DEST" ]] && [[ "$FORCE" != true ]]; then
-  warn "Hook already exists: clear-alert.sh (use --force to overwrite)"
-else
-  rm -f "$CLEAR_ALERT_DEST"
-  cp "$CLEAR_ALERT_SRC" "$CLEAR_ALERT_DEST"
-  chmod +x "$CLEAR_ALERT_DEST"
-  info "  Installed: clear-alert.sh"
-fi
-
 # Clean up old hooks if they exist
 OLD_HOOKS=("on-prompt.sh" "on-tool-start.sh" "on-permission.sh" "on-stop.sh" "on-file-write.sh")
 for old_hook in "${OLD_HOOKS[@]}"; do
@@ -148,58 +132,11 @@ else
   info "  Installed: settings.json"
 fi
 
-# Tmux hook configuration
-TMUX_CONF="$HOME/.tmux.conf"
-TMUX_HOOK_MARKER="# claude-code.nvim alert hook"
-
-info ""
-info "Tmux configuration..."
-
-TMUX_CLEAR_CMD='if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option window-status-format \"#{@original_format}\" ; set-window-option window-status-current-format \"#{@original_current_format}\""'
-
-if [[ -n "$TMUX" ]]; then
-  # We're inside tmux - can configure directly
-  if tmux show-hooks -g 2>/dev/null | grep -q "after-select-window.*@alert"; then
-    info "  Tmux hooks already configured (runtime)"
-  else
-    info "  Adding tmux alert-clear hooks..."
-    tmux set-hook -g after-select-window "$TMUX_CLEAR_CMD"
-    tmux set-hook -g session-window-changed "$TMUX_CLEAR_CMD"
-    info "  Installed: after-select-window, session-window-changed hooks"
-  fi
-fi
-
-# Also add to tmux.conf for persistence
-if [[ -f "$TMUX_CONF" ]]; then
-  if grep -q "$TMUX_HOOK_MARKER" "$TMUX_CONF"; then
-    info "  Tmux hook already in ~/.tmux.conf"
-  else
-    info "  Adding hook to ~/.tmux.conf..."
-    cat >> "$TMUX_CONF" << 'EOF'
-
-# claude-code.nvim alert hooks - clears window alert on focus (keyboard + mouse)
-# Restores original format from @original_format/@original_current_format saved by the plugin
-set-hook -g after-select-window 'if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option window-status-format \"#{@original_format}\" ; set-window-option window-status-current-format \"#{@original_current_format}\""'
-set-hook -g session-window-changed 'if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option window-status-format \"#{@original_format}\" ; set-window-option window-status-current-format \"#{@original_current_format}\""'
-EOF
-    info "  Installed: ~/.tmux.conf hooks"
-    if [[ -z "$TMUX" ]]; then
-      warn "  Run 'tmux source-file ~/.tmux.conf' to apply"
-    fi
-  fi
-else
-  info "  Creating ~/.tmux.conf with alert hooks..."
-  cat > "$TMUX_CONF" << 'EOF'
-# claude-code.nvim alert hooks - clears window alert on focus (keyboard + mouse)
-# Restores original format from @original_format/@original_current_format saved by the plugin
-set-hook -g after-select-window 'if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option window-status-format \"#{@original_format}\" ; set-window-option window-status-current-format \"#{@original_current_format}\""'
-set-hook -g session-window-changed 'if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option window-status-format \"#{@original_format}\" ; set-window-option window-status-current-format \"#{@original_current_format}\""'
-EOF
-  info "  Created: ~/.tmux.conf"
-fi
-
 info ""
 info "Installation complete!"
+info ""
+info "Tmux alerts: Window tab changes color when Claude needs attention."
+info "             Alert clears automatically when Neovim gets focus (FocusGained)."
 info ""
 info "Hook event → Neovim state mapping:"
 info "  SessionStart      → idle"

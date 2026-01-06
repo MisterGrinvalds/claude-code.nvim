@@ -1,5 +1,5 @@
 -- claude-code.nvim - Multi-instance Claude Code integration for Neovim
--- lazygit-style floating window with status indicators
+-- Split or floating window with status indicators
 
 local M = {}
 
@@ -15,7 +15,7 @@ M.command = require('claude-code.command')
 -- Default configuration
 M.config = {
   window = {
-    mode = 'float',       -- 'float' or 'split'
+    mode = 'split',       -- 'split' or 'float'
     split_side = 'right', -- 'right' or 'left' (for split mode)
     split_width = 0.4,    -- Width fraction for split mode (0.0-1.0)
     width = 0.9,          -- 90% of screen (lazygit-style, for float mode)
@@ -52,6 +52,19 @@ function M.setup(opts)
   -- Initialize sync module (watches refresh file for buffer reload)
   M.sync.setup()
 
+  -- Initialize tmux integration (enables focus-events, registers window-switch hooks)
+  local tmux = require('claude-code.tmux')
+  tmux.setup()
+
+  -- Clear tmux alert when Neovim gets focus (user switched to this window)
+  vim.api.nvim_create_autocmd('FocusGained', {
+    group = vim.api.nvim_create_augroup('claude-code-tmux', { clear = true }),
+    callback = function()
+      local tmux = require('claude-code.tmux')
+      tmux.clear()
+    end,
+  })
+
   -- Initialize command module
   M.command.setup()
 
@@ -79,6 +92,11 @@ end
 ---@param name string Session name
 function M.toggle_session(name)
   M.window.toggle(name)
+end
+
+--- Focus Claude window (show if hidden, don't hide if visible)
+function M.focus()
+  M.window.focus()
 end
 
 --- Create new Claude session

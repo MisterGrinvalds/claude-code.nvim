@@ -73,16 +73,44 @@ local function get_tmux_option(window_id, option)
   return nil
 end
 
+--- Check if format contains our alert colors (meaning it's our format, not original)
+---@param format string Format string to check
+---@return boolean
+local function is_our_format(format)
+  if not format then
+    return false
+  end
+  -- Check for any of our Catppuccin alert colors
+  return format:match('#a6e3a1') or format:match('#f9e2af') or format:match('#fab387') or format:match('#f38ba8')
+end
+
+--- Get global tmux option (bypasses window-specific overrides)
+---@param option string Option name
+---@return string|nil
+local function get_global_option(option)
+  local cmd = string.format("tmux show-options -gv %s 2>/dev/null", option)
+  local handle = io.popen(cmd)
+  if handle then
+    local result = handle:read('*a')
+    handle:close()
+    if result and result:gsub('%s+', '') ~= '' then
+      return result:gsub('%s+$', '')
+    end
+  end
+  return nil
+end
+
 --- Save the original window formats for later restoration
 ---@param window_id string
 local function save_original_format(window_id)
-  if M._original_format and M._current_window_id == window_id then
-    return -- Already saved for this window
+  -- Check cached format - if it's our alert format, we need to refresh from global
+  if M._original_format and M._current_window_id == window_id and not is_our_format(M._original_format) then
+    return -- Already have valid saved format for this window
   end
 
-  -- Get both inactive and current window formats
-  M._original_format = get_tmux_option(window_id, 'window-status-format') or '#I:#W#F'
-  M._original_current_format = get_tmux_option(window_id, 'window-status-current-format') or '#I:#W#F'
+  -- Always get from global to ensure we have the real original (not our alert format)
+  M._original_format = get_global_option('window-status-format') or '#I:#W#F'
+  M._original_current_format = get_global_option('window-status-current-format') or '#I:#W#F'
   M._current_window_id = window_id
 end
 
@@ -146,6 +174,15 @@ function M.clear()
   if M._original_current_format then
     vim.fn.system(string.format("tmux set-window-option -t %s window-status-current-format '%s' 2>/dev/null", window_id, M._original_current_format))
   end
+
+  -- Unset saved formats in tmux so next alert saves fresh from global
+  vim.fn.system(string.format("tmux set-window-option -t %s -u @original_format 2>/dev/null", window_id))
+  vim.fn.system(string.format("tmux set-window-option -t %s -u @original_current_format 2>/dev/null", window_id))
+
+  -- Reset Lua cache so next alert fetches fresh from global
+  M._original_format = nil
+  M._original_current_format = nil
+  M._current_window_id = nil
 end
 
 --- Alert: task complete (teal)
@@ -180,6 +217,24 @@ function M.on_state_change(state)
   elseif state == 'idle' then
     M.clear()  -- restore normal
   end
+end
+
+--- Setup tmux integration
+--- Enables focus-events and registers window-switch hooks to clear alerts
+function M.setup()
+  if not M.is_tmux() then
+    return
+  end
+
+  -- Enable focus-events (required for FocusGained autocmd to work)
+  vim.fn.system('tmux set-option -g focus-events on 2>/dev/null')
+
+  -- Register global hooks to clear alerts when switching windows
+  -- These fire on keyboard navigation (after-select-window) and mouse clicks (session-window-changed)
+  -- The hook: clears alert, restores formats, then unsets saved formats so next alert saves fresh
+  local clear_cmd = 'if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option window-status-format \\"#{@original_format}\\" ; set-window-option window-status-current-format \\"#{@original_current_format}\\" ; set-window-option -u @original_format ; set-window-option -u @original_current_format"'
+  vim.fn.system(string.format("tmux set-hook -g after-select-window '%s' 2>/dev/null", clear_cmd))
+  vim.fn.system(string.format("tmux set-hook -g session-window-changed '%s' 2>/dev/null", clear_cmd))
 end
 
 return M
