@@ -82,7 +82,7 @@ tmux_alert() {
   tmux set-window-option -t "$window_id" window-status-current-format "#[fg=$color,bold,bg=$COLOR_BG]${plain_current}#[default]" 2>/dev/null || true
 }
 
-# Tmux clear function - restores original window format
+# Tmux clear function - restores original window format by unsetting overrides
 tmux_clear() {
   [ -z "${TMUX:-}" ] && return 0
   local window_id
@@ -92,14 +92,11 @@ tmux_clear() {
   # Clear alert flag
   tmux set-window-option -t "$window_id" @alert 0 2>/dev/null || true
 
-  # Restore original formats
-  local orig curr
-  orig=$(tmux show-window-options -t "$window_id" -v @original_format 2>/dev/null) || true
-  curr=$(tmux show-window-options -t "$window_id" -v @original_current_format 2>/dev/null) || true
-  [ -n "$orig" ] && tmux set-window-option -t "$window_id" window-status-format "$orig" 2>/dev/null || true
-  [ -n "$curr" ] && tmux set-window-option -t "$window_id" window-status-current-format "$curr" 2>/dev/null || true
+  # Unset window-specific format overrides (lets global theme take over)
+  tmux set-window-option -t "$window_id" -u window-status-format 2>/dev/null || true
+  tmux set-window-option -t "$window_id" -u window-status-current-format 2>/dev/null || true
 
-  # Unset saved formats so next alert saves fresh from global
+  # Unset saved format metadata
   tmux set-window-option -t "$window_id" -u @original_format 2>/dev/null || true
   tmux set-window-option -t "$window_id" -u @original_current_format 2>/dev/null || true
 }

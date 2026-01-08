@@ -167,15 +167,11 @@ function M.clear()
   -- Clear alert flag
   vim.fn.system(string.format("tmux set-window-option -t %s @alert 0 2>/dev/null", window_id))
 
-  -- Restore original formats (preserves user's custom theme)
-  if M._original_format then
-    vim.fn.system(string.format("tmux set-window-option -t %s window-status-format '%s' 2>/dev/null", window_id, M._original_format))
-  end
-  if M._original_current_format then
-    vim.fn.system(string.format("tmux set-window-option -t %s window-status-current-format '%s' 2>/dev/null", window_id, M._original_current_format))
-  end
+  -- Unset window-specific format overrides (lets global theme take over)
+  vim.fn.system(string.format("tmux set-window-option -t %s -u window-status-format 2>/dev/null", window_id))
+  vim.fn.system(string.format("tmux set-window-option -t %s -u window-status-current-format 2>/dev/null", window_id))
 
-  -- Unset saved formats in tmux so next alert saves fresh from global
+  -- Unset saved format metadata
   vim.fn.system(string.format("tmux set-window-option -t %s -u @original_format 2>/dev/null", window_id))
   vim.fn.system(string.format("tmux set-window-option -t %s -u @original_current_format 2>/dev/null", window_id))
 
@@ -231,8 +227,8 @@ function M.setup()
 
   -- Register global hooks to clear alerts when switching windows
   -- These fire on keyboard navigation (after-select-window) and mouse clicks (session-window-changed)
-  -- The hook: clears alert, restores formats, then unsets saved formats so next alert saves fresh
-  local clear_cmd = 'if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option window-status-format \\"#{@original_format}\\" ; set-window-option window-status-current-format \\"#{@original_current_format}\\" ; set-window-option -u @original_format ; set-window-option -u @original_current_format"'
+  -- The hook: clears alert flag and unsets window-specific format overrides (lets global theme take over)
+  local clear_cmd = 'if-shell -F "#{@alert}" "set-window-option @alert 0 ; set-window-option -u window-status-format ; set-window-option -u window-status-current-format ; set-window-option -u @original_format ; set-window-option -u @original_current_format"'
   vim.fn.system(string.format("tmux set-hook -g after-select-window '%s' 2>/dev/null", clear_cmd))
   vim.fn.system(string.format("tmux set-hook -g session-window-changed '%s' 2>/dev/null", clear_cmd))
 end
